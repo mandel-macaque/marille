@@ -22,4 +22,8 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Marille\Marille.csproj" />
+  </ItemGroup>
+
 </Project>
