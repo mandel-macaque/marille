@@ -1,6 +1,3 @@
 namespace Marille.Tests;
 
-public class TopicTests
-{
-    
-}
+public class TopicTests { }

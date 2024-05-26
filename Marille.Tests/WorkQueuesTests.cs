@@ -5,102 +5,116 @@ namespace Marille.Tests;
 // Set of tests that focus on the pattern in which a 
 // several consumers register to a queue and the compete
 // to consume an event.
-public class WorkQueuesTests
-{
-    public record WorkQueuesEvent(string Id);
+public class WorkQueuesTests {
+	record WorkQueuesEvent (string Id);
 
-    public record WorkDoneEvent(string WorkerId);
+	record WorkDoneEvent (string WorkerId);
 
-    public class FastWorker : IWorker<WorkQueuesEvent>
-    {
-        public string Id { get; set; }
-    }
+	class FastWorker : IWorker<WorkQueuesEvent> {
+		public string Id { get; set; } = string.Empty;
+		public AutoResetEvent Event { get; private set; }
 
-    public class SlowWorker : IWorker<WorkQueuesEvent>
-    {
-        public string Id { get; set; }
-    }
+		public FastWorker (string id, AutoResetEvent @event)
+		{
+			Id = id;
+			Event = @event;
+		}
 
-    public class WorkQueuesTestHub : Hub
-    {
-        
-    }
+		public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
+			=> Task.FromResult (Event.Set ());
+	}
 
-    private Hub _hub;
-    private Channel<WorkDoneEvent> _completedChannel;
-    private CancellationTokenSource _cancellationTokenSource;
+	class SlowWorker : IWorker<WorkQueuesEvent> {
+		public string Id { get; set; } = string.Empty;
+		public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
+		{
+			throw new NotImplementedException ();
+		}
+	}
+	
+	class ExceptionWorker : IWorker<WorkQueuesEvent> {
+		public string Id { get; set; } = string.Empty;
+		public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
+		{
+			throw new NotImplementedException ();
+		}
+	}
 
-    public WorkQueuesTests()
-    {
-        // use a simpler channel that we will use to receive the events when
-        // a worker has completed its work
-        _hub = new WorkQueuesTestHub ();
-        _completedChannel = Channel.CreateUnbounded<WorkDoneEvent>();
-        _cancellationTokenSource = new();
-    }
-    
-    // The simplest API usage, we register to an event for a topic with our worker
-    // and the event should be consumed and added to the completed channel for use to verify
-    [Fact]
-    public async void SingleWorker ()
-    {
-        var worker = new FastWorker { Id = "myWorkerID" };
-        _hub.TryRegister("topic", worker);
-        await _hub.Publish("topic", new WorkDoneEvent("myID"));
-        // use read async with a timeout from our cancelation token
-        _cancellationTokenSource.CancelAfter(100);
-        var workerResult = 
-            await _completedChannel.Reader.ReadAsync(_cancellationTokenSource.Token);
-        Assert.Equal(worker.Id, workerResult.WorkerId);
-    }
+	class WorkQueuesTestHub : Hub { }
 
-    [Fact]
-    public async void SingleAction()
-    {
-        var workerID = "myWorkerID";
-        Action<WorkQueuesEvent> action = (channelEvent) =>
-        {
-            _completedChannel.Writer.TryWrite(new WorkDoneEvent(workerID));
-        };
-        
-        Assert.True(_hub.TryRegister("topic", action));
-        await _hub.Publish("topic", new WorkDoneEvent("myID"));
-        
-        // use read async with a timeout from our cancellation token
-        _cancellationTokenSource.CancelAfter(100);
-        var workerResult = 
-            await _completedChannel.Reader.ReadAsync(_cancellationTokenSource.Token);
-        Assert.Equal(workerID, workerResult.WorkerId);
-    }
-    
-    [Fact]
-    public async void SeveralWorkers ()
-    {
-        var workerID = "myWorkerID";
-        var topic1 = "topic1";
-        var topic2 = "topic2";
-        // ensure that each of the workers will receive data for the topic it is interested
-        var worker1 = new FastWorker();
-        Assert.True(_hub.TryRegister(topic1, worker1));
-        
-        Action<WorkQueuesEvent> worker2 = _ => { };
-        Assert.True(_hub.TryRegister(topic2, worker2));
-        
-        // publish two both topics and ensure that each of the workers gets teh right data
-        Task<WorkDoneEvent> [] publishTasks = [
-            _hub.Publish(topic1, new WorkDoneEvent("")),
-            _hub.Publish(topic2, new WorkDoneEvent(""))];
-        await Task.WhenAll(publishTasks);
-        // we should only get the event in topic one, the second topic should be ignored
-        var workerResult = 
-            await _completedChannel.Reader.ReadAsync(_cancellationTokenSource.Token);
-        Assert.Equal(workerID, workerResult.WorkerId);
-        // we should not be able to read anymore
-        Assert.False(_completedChannel.Reader.TryRead(out var @event));
-    }
+	Hub _hub;
+	TopicConfiguration configuration;
+	readonly CancellationTokenSource cancellationTokenSource;
 
-    [Fact]
-    public void SlowFastWorker()
-    {
-    }
+	public WorkQueuesTests ()
+	{
+		// use a simpler channel that we will use to receive the events when
+		// a worker has completed its work
+		_hub = new WorkQueuesTestHub ();
+		configuration = new() { Mode = ChannelDeliveryMode.AtMostOnce };
+		cancellationTokenSource = new();
+		cancellationTokenSource.CancelAfter (TimeSpan.FromSeconds (10));
+	}
+
+	// The simplest API usage, we register to an event for a topic with our worker
+	// and the event should be consumed and added to the completed channel for use to verify
+	[Fact]
+	public async void SingleWorker ()
+	{
+		var topic = "topic";
+		var reset = new AutoResetEvent (false);
+		var worker = new FastWorker ("myWorkerID", reset);
+		_hub.TryCreate<WorkQueuesEvent> (topic, configuration);
+		_hub.TryRegister (topic, worker);
+		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));
+		Assert.True (reset.WaitOne(10));
+	}
+
+	[Fact]
+	public async void SingleAction ()
+	{
+		var topic = "topic";
+		string workerID = "myWorkerID";
+		var reset = new AutoResetEvent (false);
+		Func<WorkQueuesEvent, CancellationToken, Task> action = (_, _) =>
+			Task.FromResult (reset.Set ());
+
+		_hub.TryCreate<WorkQueuesEvent> (topic, configuration);
+		Assert.True (_hub.TryRegister (topic, action));
+		await _hub.Publish (topic, new WorkQueuesEvent("myID"));
+		Assert.True (reset.WaitOne(10));
+	}
+
+	[Fact]
+	public async void SeveralWorkers ()
+	{
+		string workerID = "myWorkerID";
+
+		string topic1 = "topic1";
+		var resetWorker1 = new AutoResetEvent (false);
+		_hub.TryCreate<WorkQueuesEvent> (topic1, configuration);
+
+		string topic2 = "topic2";
+		var resetWorker2 = new AutoResetEvent (false);
+		_hub.TryCreate<WorkQueuesEvent> (topic2, configuration);
+		
+		// ensure that each of the workers will receive data for the topic it is interested
+		var worker1 = new FastWorker (workerID, resetWorker1);
+		Assert.True (_hub.TryRegister (topic1, worker1));
+
+		Func<WorkQueuesEvent, CancellationToken, Task> worker2 = (_, _) => {
+			return Task.FromResult (resetWorker2.Set ());
+		};
+		Assert.True (_hub.TryRegister (topic2, worker2));
+
+		// publish two both topics and ensure that each of the workers gets teh right data
+		await _hub.Publish (topic1, new WorkQueuesEvent ("1"));
+
+		// we should only get the event in topic one, the second topic should be ignored
+		Assert.True (resetWorker1.WaitOne(10));
+		Assert.False (resetWorker2.WaitOne(10));
+	}
+
+	[Fact]
+	public void SlowFastWorker () { }
 }
