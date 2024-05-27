@@ -12,16 +12,16 @@ public class WorkQueuesTests {
 
 	class FastWorker : IWorker<WorkQueuesEvent> {
 		public string Id { get; set; } = string.Empty;
-		public AutoResetEvent Event { get; private set; }
+		public TaskCompletionSource<bool> Completion { get; private set; }
 
-		public FastWorker (string id, AutoResetEvent @event)
+		public FastWorker (string id, TaskCompletionSource<bool> tcs)
 		{
 			Id = id;
-			Event = @event;
+			Completion = tcs;
 		}
 
 		public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
-			=> Task.FromResult (Event.Set ());
+			=> Task.FromResult (Completion.TrySetResult(true));
 	}
 
 	class SlowWorker : IWorker<WorkQueuesEvent> {
@@ -62,26 +62,26 @@ public class WorkQueuesTests {
 	public async void SingleWorker ()
 	{
 		var topic = "topic";
-		var reset = new AutoResetEvent (false);
-		var worker = new FastWorker ("myWorkerID", reset);
-		_hub.TryCreate<WorkQueuesEvent> (topic, configuration);
-		_hub.TryRegister (topic, worker);
+		var tcs = new TaskCompletionSource<bool> ();
+		var worker = new FastWorker ("myWorkerID", tcs);
+		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration);
+		await _hub.RegisterAsync (topic, worker);
 		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));
-		Assert.True (reset.WaitOne(10));
+		Assert.True (await tcs.Task);
 	}
 
 	[Fact]
 	public async void SingleAction ()
 	{
 		var topic = "topic";
-		var reset = new AutoResetEvent (false);
+		var tcs = new TaskCompletionSource<bool>();
 		Func<WorkQueuesEvent, CancellationToken, Task> action = (_, _) =>
-			Task.FromResult (reset.Set ());
+			Task.FromResult (tcs.TrySetResult(true));
 
-		_hub.TryCreate<WorkQueuesEvent> (topic, configuration);
-		Assert.True (_hub.TryRegister (topic, action));
+		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration);
+		Assert.True (await _hub.RegisterAsync (topic, action));
 		await _hub.Publish (topic, new WorkQueuesEvent("myID"));
-		Assert.True (reset.WaitOne(10));
+		Assert.True (await tcs.Task);
 	}
 
 	[Fact]
@@ -90,26 +90,28 @@ public class WorkQueuesTests {
 		string workerID = "myWorkerID";
 
 		string topic1 = "topic1";
-		var resetWorker1 = new AutoResetEvent (false);
-		_hub.TryCreate<WorkQueuesEvent> (topic1, configuration);
+		var tcsWorker1 = new TaskCompletionSource<bool> ();
+		await _hub.CreateAsync<WorkQueuesEvent> (topic1, configuration);
 
 		string topic2 = "topic2";
-		var resetWorker2 = new AutoResetEvent (false);
-		_hub.TryCreate<WorkQueuesEvent> (topic2, configuration);
+		var tcsWorker2 = new TaskCompletionSource<bool> ();
+		await _hub.CreateAsync<WorkQueuesEvent> (topic2, configuration);
 		
 		// ensure that each of the workers will receive data for the topic it is interested
-		var worker1 = new FastWorker (workerID, resetWorker1);
-		Assert.True (_hub.TryRegister (topic1, worker1));
+		var worker1 = new FastWorker (workerID, tcsWorker1);
+		Assert.True (await _hub.RegisterAsync (topic1, worker1));
 
-		Func<WorkQueuesEvent, CancellationToken, Task> worker2 = (_, _) => Task.FromResult (resetWorker2.Set ());
-		Assert.True (_hub.TryRegister (topic2, worker2));
+		Func<WorkQueuesEvent, CancellationToken, Task> worker2 = (_, _) 
+			=> Task.FromResult (tcsWorker2.TrySetResult(true));
+		
+		Assert.True (await _hub.RegisterAsync (topic2, worker2));
 
 		// publish two both topics and ensure that each of the workers gets teh right data
 		await _hub.Publish (topic1, new WorkQueuesEvent ("1"));
 
 		// we should only get the event in topic one, the second topic should be ignored
-		Assert.True (resetWorker1.WaitOne(15));
-		Assert.False (resetWorker2.WaitOne(10));
+		Assert.True (await tcsWorker1.Task);
+		Assert.False (tcsWorker2.Task.IsCompleted);
 	}
 
 	[Fact]
