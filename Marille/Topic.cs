@@ -14,20 +14,21 @@ internal class Topic (string name) {
 		channel = null;
 		if (!channels.TryGetValue (type, out var obj)) 
 			return false;
-		channel = new (obj.Configuration, (obj.Channel as Channel<T>)!);
+		channel = new (obj.Configuration, (obj.Channel as Channel<Message<T>>)!);
 		return true;
 	}
 
-	public Channel<T> CreateChannel<T> (TopicConfiguration configuration)
+	public Channel<Message<T>> CreateChannel<T> (TopicConfiguration configuration)
 	{
 		Type type = typeof (T);
 		if (!channels.TryGetValue (type, out var obj)) {
 			var ch = (configuration.Capacity is null) ? 
-				Channel.CreateUnbounded<T> () : Channel.CreateBounded<T> (configuration.Capacity.Value);
-			channels [type] = new (configuration, ch);
+				Channel.CreateUnbounded<Message<T>> () : Channel.CreateBounded<Message<T>> (configuration.Capacity.Value);
+			obj = new (configuration, ch);
+			channels[type] = obj; 
 		}
 
-		return (obj.Channel as Channel<T>)!;
+		return (obj.Channel as Channel<Message<T>>)!;
 	}
 
 	public void CloseChannel<T> ()

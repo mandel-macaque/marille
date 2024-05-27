@@ -14,11 +14,22 @@ public abstract class Hub {
 	
 	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
 	
-	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<T> ch, IWorker<T>[] workersArray, CancellationToken cancellationToken)
+	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IWorker<T>[] workersArray, 
+		TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken)
 	{
-		while (await ch.Reader.WaitToReadAsync (cancellationToken)) {
-			while (ch.Reader.TryRead (out T? item)) {
-				if (item is null)
+		// this is an important check, else the items will be consumer with no worker to receive them
+		if (workersArray.Length == 0) {
+			completionSource.SetResult (true);
+			return;
+		}
+
+		// we want to set the completion source to true ONLY when we are consuming, that happens the first time
+		// we have a WaitToReadAsync result. The or will ensure we do not call try set result more than once
+		while (await ch.Reader.WaitToReadAsync (cancellationToken) 
+		       && (completionSource.Task.IsCompleted || completionSource.TrySetResult (true))) {
+			while (ch.Reader.TryRead (out var item)) {
+				// filter the ack message since it is only used to make sure that the task is indeed consuming
+				if (item.Type == MessageType.Ack || item.Payload is null) 
 					continue;
 				switch (configuration.Mode) {
 				case ChannelDeliveryMode.AtLeastOnce:
@@ -29,7 +40,7 @@ public abstract class Hub {
 							cts.CancelAfter (configuration.Timeout.Value);
 							token = cts.Token;
 						}
-						_ = worker.ConsumeAsync (item, token)
+						_ = worker.ConsumeAsync (item.Payload, token)
 							.ContinueWith ((t) => { ch.Writer.WriteAsync (item); }, TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
 							.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof(T), worker, t.Exception)), 
 								TaskContinuationOptions.OnlyOnFaulted);
@@ -38,7 +49,7 @@ public abstract class Hub {
 				default:
 					// dumb algo atm, picking one at random, initialWorkers can have
 					// state
-					var index = (workers.Count == 0)? 0 : rnd.Next (workers.Count);
+					var index = (workersArray.Length == 1) ? 0 : rnd.Next (workersArray.Length);
 					var worker = workersArray [index];
 					CancellationToken token = default;
 					if (configuration.Timeout.HasValue) {
@@ -46,17 +57,20 @@ public abstract class Hub {
 						cts.CancelAfter (configuration.Timeout.Value);
 						token = cts.Token;
 					}
-					_ = worker.ConsumeAsync (item, token)
-							.ContinueWith ((t) => { ch.Writer.WriteAsync (item);}, TaskContinuationOptions.OnlyOnCanceled)// TODO: max retries
-							.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof(T), worker, t.Exception)), 
-								TaskContinuationOptions.OnlyOnFaulted);
+					_ = worker.ConsumeAsync (item.Payload, token)
+						.ContinueWith ((t) => { ch.Writer.WriteAsync (item); },
+							TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
+						.ContinueWith (
+							(t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof (T), worker,
+								t.Exception)),
+							TaskContinuationOptions.OnlyOnFaulted);
 					break;
 				}
 			}
 		}
 	}
 
-	void StartConsuming<T> (string topicName, TopicConfiguration configuration, Channel<T> channel)
+	Task<bool> StartConsuming<T> (string topicName, TopicConfiguration configuration, Channel<Message<T>> channel)
 	{
 		Type type = typeof (T);
 		// we want to be able to cancel the thread that we are using to consume the
@@ -69,8 +83,13 @@ public abstract class Hub {
 		cancellationTokenSources [(topicName, type)] = cancellationToken;
 		var workersCopy = workers[(topicName, type)].Select (x => (IWorker<T>)x).ToArray ();
 
-		// we have no interest in awaiting for this task
-		_ = ConsumeChannel (configuration, channel, workersCopy, cancellationToken.Token);
+		// we have no interest in awaiting for this task, but we want to make sure it started. To do so
+		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
+		var completionSource = new TaskCompletionSource<bool>();
+		_ = ConsumeChannel (configuration, channel, workersCopy, completionSource, cancellationToken.Token);
+		// send a message with a ack so that we can ensure we are indeed running
+		_ = channel.Writer.WriteAsync (new Message<T> (MessageType.Ack));
+		return completionSource.Task;
 	}
 
 	void StopConsuming<T> (string topicName)
@@ -109,7 +128,7 @@ public abstract class Hub {
 	/// <param name="initialWorkers">Original set of IWoker<T> to be assigned the channel on creation.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
-	public bool TryCreate<T> (string topicName, TopicConfiguration configuration,
+	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
 		IEnumerable<IWorker<T>> initialWorkers)
 	{
 		// the topic might already have the channel, in that case, do nothing
@@ -127,7 +146,7 @@ public abstract class Hub {
 			return false;
 		}
 		var ch = topic.CreateChannel<T> (configuration);
-		StartConsuming (topicName, configuration, ch);
+		await StartConsuming (topicName, configuration, ch);
 		return true;
 	}
 
@@ -142,8 +161,8 @@ public abstract class Hub {
 	/// <param name="configuration">The configuration to use for the channel creation.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
-	public bool TryCreate<T> (string topicName, TopicConfiguration configuration)
-		=> TryCreate (topicName, configuration, Array.Empty<IWorker<T>> ());
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration)
+		=> CreateAsync (topicName, configuration, Array.Empty<IWorker<T>> ());
 
 	public bool TryCreateAndRegister<T> (string topicName) => false;
 	
@@ -157,29 +176,29 @@ public abstract class Hub {
 	/// <remarks>Workers can be added to channels that are already being processed. The Hub will pause the consumtion
 	/// of the messages while it adds the worker and will resume the processing after. Producer can be sending
 	/// messages while this operation takes place because messages will be buffered by the channel.</remarks>
-	public bool TryRegister<T> (string topicName, params IWorker<T>[] newWorkers)
+	public Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers)
 	{
 		// we only allow the client to register to an existing topic
 		// in this API we will not create it, there are other APIs for that
 		if (!TryGetChannel<T> (topicName, out var ch))
-			return false;
+			return Task.FromResult(false);
 
 		// we will have to stop consuming while we add the new worker
 		// but we do not need to close the channel, the API will buffer
 		StopConsuming<T> (topicName);
 		workers [(topicName, typeof (T))].AddRange (newWorkers);
-		StartConsuming (topicName, ch.Configuration, ch.Channel);
-		return true;
+		return StartConsuming (topicName, ch.Configuration, ch.Channel);
 	}
 
-	public bool TryRegister<T> (string topicName, Func<T, CancellationToken, Task> action) =>
-		TryRegister (topicName, new LambdaWorker<T> (action));
+	public Task<bool> RegisterAsync<T> (string topicName, Func<T, CancellationToken, Task> action) =>
+		RegisterAsync (topicName, new LambdaWorker<T> (action));
 
 	public ValueTask Publish<T> (string topicName, T publishedEvent)
 	{
 		if (!TryGetChannel<T> (topicName, out var ch))
 			throw new InvalidOperationException (
 				$"Channel with topic {topicName} for event type {typeof(T)} not found");
-		return ch.Channel.Writer.WriteAsync (publishedEvent);
+		var message = new Message<T> (MessageType.Data, publishedEvent);
+		return ch.Channel.Writer.WriteAsync (message);
 	}
 }
