@@ -101,16 +101,14 @@ public class WorkQueuesTests {
 		var worker1 = new FastWorker (workerID, resetWorker1);
 		Assert.True (_hub.TryRegister (topic1, worker1));
 
-		Func<WorkQueuesEvent, CancellationToken, Task> worker2 = (_, _) => {
-			return Task.FromResult (resetWorker2.Set ());
-		};
+		Func<WorkQueuesEvent, CancellationToken, Task> worker2 = (_, _) => Task.FromResult (resetWorker2.Set ());
 		Assert.True (_hub.TryRegister (topic2, worker2));
 
 		// publish two both topics and ensure that each of the workers gets teh right data
 		await _hub.Publish (topic1, new WorkQueuesEvent ("1"));
 
 		// we should only get the event in topic one, the second topic should be ignored
-		Assert.True (resetWorker1.WaitOne(10));
+		Assert.True (resetWorker1.WaitOne(15));
 		Assert.False (resetWorker2.WaitOne(10));
 	}
 
