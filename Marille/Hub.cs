@@ -115,7 +115,7 @@ public abstract class Hub {
 		// the topic might already have the channel, in that case, do nothing
 		Type type = typeof (T);
 		if (!topics.TryGetValue (topicName, out Topic? topic)) {
-			topic = new();
+			topic = new(topicName);
 			topics [topicName] = topic;
 		}
 

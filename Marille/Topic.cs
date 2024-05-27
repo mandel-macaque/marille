@@ -3,10 +3,10 @@ using System.Threading.Channels;
 
 namespace Marille;
 
-internal class Topic {
+internal class Topic (string name) {
 	readonly Dictionary<Type, (TopicConfiguration Configuration, object Channel)> channels = new();
 
-	public string Name { get; set; }
+	public string Name { get; } = name;
 
 	public bool TryGetChannel<T> ([NotNullWhen (true)] out TopicInfo<T>? channel)
 	{
