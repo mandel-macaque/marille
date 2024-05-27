@@ -74,7 +74,6 @@ public class WorkQueuesTests {
 	public async void SingleAction ()
 	{
 		var topic = "topic";
-		string workerID = "myWorkerID";
 		var reset = new AutoResetEvent (false);
 		Func<WorkQueuesEvent, CancellationToken, Task> action = (_, _) =>
 			Task.FromResult (reset.Set ());
