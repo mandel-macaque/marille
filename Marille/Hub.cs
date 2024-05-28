@@ -29,7 +29,7 @@ public abstract class Hub {
 		       && (completionSource.Task.IsCompleted || completionSource.TrySetResult (true))) {
 			while (ch.Reader.TryRead (out var item)) {
 				// filter the ack message since it is only used to make sure that the task is indeed consuming
-				if (item.Type == MessageType.Ack || item.Payload is null) 
+				if (item.Type == MessageType.Ack) 
 					continue;
 				switch (configuration.Mode) {
 				case ChannelDeliveryMode.AtLeastOnce:
@@ -40,7 +40,7 @@ public abstract class Hub {
 							cts.CancelAfter (configuration.Timeout.Value);
 							token = cts.Token;
 						}
-						_ = worker.ConsumeAsync (item.Payload.Value, token)
+						_ = worker.ConsumeAsync (item.Payload, token)
 							.ContinueWith ((t) => { ch.Writer.WriteAsync (item); }, TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
 							.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof(T), worker, t.Exception)), 
 								TaskContinuationOptions.OnlyOnFaulted);
@@ -57,7 +57,7 @@ public abstract class Hub {
 						cts.CancelAfter (configuration.Timeout.Value);
 						token = cts.Token;
 					}
-					_ = worker.ConsumeAsync (item.Payload.Value, token)
+					_ = worker.ConsumeAsync (item.Payload, token)
 						.ContinueWith ((t) => { ch.Writer.WriteAsync (item); },
 							TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
 						.ContinueWith (
