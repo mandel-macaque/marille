@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-
+    name: Build package
     runs-on: ubuntu-latest
 
     steps:
@@ -26,4 +26,42 @@ jobs:
     - run: dotnet build -c Release
 
     - name: Create the package
-      run: dotnet pack -c Release
+      run: dotnet pack -c Release -o .
+
+    - name: Upload Package for Publishing
+      uses: actions/upload-artifact@v3
+      with:
+        name: PackedLib
+        path: ./*.nupkg
+
+  github-publish:
+    needs: build
+    name: Publish to Github
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download built project
+      uses: actions/download-artifact@v3
+      with:
+        name: PackedLib
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v2
+      with:
+        dotnet-version: 8.0.x
+
+  nuget-publish:
+    needs: build
+    name: Publish to Github
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download built project
+      uses: actions/download-artifact@v3
+      with:
+        name: PackedLib
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v2
+      with:
+        dotnet-version: 8.0.x
