@@ -54,7 +54,7 @@ public Task CreateChannels () {
     var worker = new MyWorker ();
     // workers can be either added during the channel creation or after the fact
     // with the TryRegister method.
-    return _hub.CreateAsync<MyMessage> (topic, configuration, worker);
+    return _hub.CreateAsync (topic, configuration, worker);
 }
 ```
 
@@ -62,7 +62,7 @@ Lambdas can also be registered as workers:
 
 ```csharp
 Func<MyMessage, CancellationToken, Task> worker = (_, _) => Task.FromResult (true);
-return _hub.CreateAsync<MyMessage> (topic, configuration, worker);
+return _hub.CreateAsync (topic, configuration, worker);
 ```
 
 3. Publish messages via the hub.
