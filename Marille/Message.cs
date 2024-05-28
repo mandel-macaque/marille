@@ -4,10 +4,10 @@ internal enum MessageType {
 	Ack,
 	Data
 }
-internal struct Message<T> {
+internal struct Message<T> where T : struct {
 	public Guid Id { get; }
 	public MessageType Type { get; }
-	public T? Payload { get; }
+	public T Payload { get; }
 
 	public Message (MessageType type)
 	{
