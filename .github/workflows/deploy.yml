@@ -29,7 +29,7 @@ jobs:
       run: dotnet pack -c Release -o .
 
     - name: Upload Package for Publishing
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: PackedLib
         path: ./*.nupkg
@@ -41,7 +41,7 @@ jobs:
 
     steps:
     - name: Download built project
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: PackedLib
 
@@ -57,7 +57,7 @@ jobs:
 
     steps:
     - name: Download built project
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: PackedLib
 
