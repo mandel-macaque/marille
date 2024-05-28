@@ -25,7 +25,7 @@ public class Hub {
 			}
 			_ = worker.ConsumeAsync (item.Payload, token)
 				.ContinueWith ((t) => { channel.Writer.WriteAsync (item); }, TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
-				.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof(T), worker, t.Exception)), 
+				.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new(typeof(T), worker, t.Exception)), 
 					TaskContinuationOptions.OnlyOnFaulted);
 		});
 	}
@@ -47,7 +47,7 @@ public class Hub {
 			.ContinueWith ((t) => { ch.Writer.WriteAsync (item); },
 				TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
 			.ContinueWith (
-				(t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof (T), worker,
+				(t) => WorkersExceptions.Writer.WriteAsync (new(typeof (T), worker,
 					t.Exception)),
 				TaskContinuationOptions.OnlyOnFaulted);
 		return task;
@@ -146,9 +146,9 @@ public class Hub {
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
 	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
-		IEnumerable<IWorker<T>> initialWorkers) where T : struct
+		params IWorker<T>[] initialWorkers) where T : struct
 	{
-		if (configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && initialWorkers.Count () > 1)
+		if (configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && initialWorkers.Length > 1)
 			return false;
 
 		// the topic might already have the channel, in that case, do nothing
@@ -174,6 +174,36 @@ public class Hub {
 	/// Attempts to create a new channel for the given topic name using the provided configuration. Channels cannot
 	/// be created more than once, in case the channel already exists this method returns false;
 	///
+	/// The provided workers will be added to the pool of workers that will be consuming events.
+	/// </summary>
+	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
+	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
+	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="initialWorkers">Original set of IWorker&lt;T&gt; to be assigned the channel on creation.</param>
+	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
+	/// <returns>true when the channel was created.</returns>
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+		IEnumerable<IWorker<T>> initialWorkers) where T : struct
+		=> CreateAsync (topicName, configuration, initialWorkers.ToArray ());
+
+	/// <summary>
+	/// Attempts to create a new channel for the given topic name using the provided configuration. Channels cannot
+	/// be created more than once, in case the channel already exists this method returns false;
+	/// </summary>
+	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
+	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
+	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="actions">A set of functions that will be executed when an item is delivered.</param>
+	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
+	/// <returns>true when the channel was created.</returns>
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+		params Func<T, CancellationToken, Task> [] actions) where T : struct
+		=> CreateAsync (topicName, configuration, actions.Select (a => new LambdaWorker<T> (a)));
+
+	/// <summary>
+	/// Attempts to create a new channel for the given topic name using the provided configuration. Channels cannot
+	/// be created more than once, in case the channel already exists this method returns false;
+	///
 	/// No workers will be assigned to the channel upon creation.
 	/// </summary>
 	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
@@ -183,6 +213,20 @@ public class Hub {
 	/// <returns>true when the channel was created.</returns>
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration) where T : struct
 		=> CreateAsync (topicName, configuration, Array.Empty<IWorker<T>> ());
+	
+	/// <summary>
+	/// Attempts to create a new channel for the given topic name using the provided configuration. Channels cannot
+	/// be created more than once, in case the channel already exists this method returns false;
+	/// </summary>
+	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
+	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
+	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="action">The function that will be executed when a message is delivered.</param>
+	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
+	/// <returns>true when the channel was created.</returns>
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+		Func<T, CancellationToken, Task> action) where T : struct
+		=> CreateAsync (topicName, configuration, new LambdaWorker<T> (action));
 
 	/// <summary>
 	/// Attempts to register new workers to consume messages for the given topic.
