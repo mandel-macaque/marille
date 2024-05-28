@@ -13,6 +13,46 @@ public class Hub {
 	
 	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
 	
+	void DeliverAtLeastOnce<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item, TimeSpan? timeout)
+		where T : struct
+	{
+		Parallel.ForEach (workersArray, worker => {
+			CancellationToken token = default;
+			if (timeout.HasValue) {
+				var cts = new CancellationTokenSource ();
+				cts.CancelAfter (timeout.Value);
+				token = cts.Token;
+			}
+			_ = worker.ConsumeAsync (item.Payload, token)
+				.ContinueWith ((t) => { channel.Writer.WriteAsync (item); }, TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
+				.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof(T), worker, t.Exception)), 
+					TaskContinuationOptions.OnlyOnFaulted);
+		});
+	}
+
+	Task<ValueTask> DeliverAtMostOnce<T> (Channel<Message<T>> ch, IWorker<T> [] workersArray, Message<T> item, TimeSpan? timeout)
+		where T : struct
+	{
+		// we do know we are not empty, and in the AtMostOnce mode we will only use the first worker
+		// present
+		var worker = workersArray [0];
+		CancellationToken token = default;
+		if (timeout.HasValue) {
+			var cts = new CancellationTokenSource ();
+			cts.CancelAfter (timeout.Value);
+			token = cts.Token;
+		}
+
+		var task = worker.ConsumeAsync (item.Payload, token)
+			.ContinueWith ((t) => { ch.Writer.WriteAsync (item); },
+				TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
+			.ContinueWith (
+				(t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof (T), worker,
+					t.Exception)),
+				TaskContinuationOptions.OnlyOnFaulted);
+		return task;
+	}
+
 	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IWorker<T>[] workersArray, 
 		TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken) where T : struct
 	{
@@ -32,42 +72,20 @@ public class Hub {
 					continue;
 				switch (configuration.Mode) {
 				case ChannelDeliveryMode.AtLeastOnce:
-					Parallel.ForEach (workersArray, worker => {
-						CancellationToken token = default;
-						if (configuration.Timeout.HasValue) {
-							var cts = new CancellationTokenSource ();
-							cts.CancelAfter (configuration.Timeout.Value);
-							token = cts.Token;
-						}
-						_ = worker.ConsumeAsync (item.Payload, token)
-							.ContinueWith ((t) => { ch.Writer.WriteAsync (item); }, TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
-							.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof(T), worker, t.Exception)), 
-								TaskContinuationOptions.OnlyOnFaulted);
-					});
+					DeliverAtLeastOnce (ch, workersArray, item, configuration.Timeout);
 					break;
-				default:
-					// we do know we are not empty, and in the AtMostOnce mode we will only use the first worker
-					// present
-					var worker = workersArray [0];
-					CancellationToken token = default;
-					if (configuration.Timeout.HasValue) {
-						var cts = new CancellationTokenSource ();
-						cts.CancelAfter (configuration.Timeout.Value);
-						token = cts.Token;
-					}
-					_ = worker.ConsumeAsync (item.Payload, token)
-						.ContinueWith ((t) => { ch.Writer.WriteAsync (item); },
-							TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
-						.ContinueWith (
-							(t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof (T), worker,
-								t.Exception)),
-							TaskContinuationOptions.OnlyOnFaulted);
+				case ChannelDeliveryMode.AtMostOnceAsync:
+					_ = DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout);
+					break;
+				case ChannelDeliveryMode.AtMostOnceSync:
+					// make the call 'sync' by not processing an item until we are done with the current one
+					await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout);
 					break;
 				}
 			}
 		}
 	}
-
+	
 	Task<bool> StartConsuming<T> (string topicName, TopicConfiguration configuration, Channel<Message<T>> channel)
 		where T : struct
 	{
@@ -130,7 +148,7 @@ public class Hub {
 	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
 		IEnumerable<IWorker<T>> initialWorkers) where T : struct
 	{
-		if (configuration.Mode == ChannelDeliveryMode.AtMostOnce && initialWorkers.Count () > 1)
+		if (configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && initialWorkers.Count () > 1)
 			return false;
 
 		// the topic might already have the channel, in that case, do nothing
@@ -156,7 +174,7 @@ public class Hub {
 	/// Attempts to create a new channel for the given topic name using the provided configuration. Channels cannot
 	/// be created more than once, in case the channel already exists this method returns false;
 	///
-	/// No workes will be assigned to the channel upon creation.
+	/// No workers will be assigned to the channel upon creation.
 	/// </summary>
 	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
 	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
@@ -185,7 +203,7 @@ public class Hub {
 			return Task.FromResult(false);
 
 		// do not allow to add more than one worker ig we are in AtMostOnce mode.
-		if (ch.Configuration.Mode == ChannelDeliveryMode.AtMostOnce && workers [(topicName, type)].Count >= 1)
+		if (ch.Configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && workers [(topicName, type)].Count >= 1)
 			return Task.FromResult (false);
 
 		// we will have to stop consuming while we add the new worker

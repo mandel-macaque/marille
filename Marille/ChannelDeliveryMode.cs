@@ -9,7 +9,13 @@ public enum ChannelDeliveryMode {
 	/// </summary>
 	AtLeastOnce,
 	/// <summary>
-	/// Messages in topics will be delivered just to a single worker.
+	/// Messages in topics will be delivered just to a single worker and the processing of a
+	/// message will NOT await for the task of the previous one.
 	/// </summary>
-	AtMostOnce,
+	AtMostOnceAsync,
+	/// <summary>
+	/// Messages in topics will be delivered just to a single worker and the processing of a
+	/// message will AWAIT for the task of the previous one.
+	/// </summary>
+	AtMostOnceSync,
 }

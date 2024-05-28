@@ -32,16 +32,19 @@ public class WorkQueuesTests {
 		// use a simpler channel that we will use to receive the events when
 		// a worker has completed its work
 		_hub = new ();
-		configuration = new() { Mode = ChannelDeliveryMode.AtMostOnce };
+		configuration = new();
 		cancellationTokenSource = new();
 		cancellationTokenSource.CancelAfter (TimeSpan.FromSeconds (10));
 	}
 
 	// The simplest API usage, we register to an event for a topic with our worker
 	// and the event should be consumed and added to the completed channel for use to verify
-	[Fact]
-	public async void SingleWorker ()
+	[Theory]
+	[InlineData(ChannelDeliveryMode.AtMostOnceAsync)]
+	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
+	public async void SingleWorker (ChannelDeliveryMode deliveryMode)
 	{
+		configuration.Mode = deliveryMode;
 		var topic = "topic";
 		var tcs = new TaskCompletionSource<bool> ();
 		var worker = new FastWorker ("myWorkerID", tcs);
@@ -51,9 +54,12 @@ public class WorkQueuesTests {
 		Assert.True (await tcs.Task);
 	}
 
-	[Fact]
-	public async void SingleAction ()
+	[Theory]
+	[InlineData(ChannelDeliveryMode.AtMostOnceAsync)]
+	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
+	public async void SingleAction (ChannelDeliveryMode deliveryMode)
 	{
+		configuration.Mode = deliveryMode;
 		var topic = "topic";
 		var tcs = new TaskCompletionSource<bool>();
 		Func<WorkQueuesEvent, CancellationToken, Task> action = (_, _) =>
@@ -65,9 +71,12 @@ public class WorkQueuesTests {
 		Assert.True (await tcs.Task);
 	}
 
-	[Fact]
-	public async void SeveralWorkers ()
+	[Theory]
+	[InlineData(ChannelDeliveryMode.AtMostOnceAsync)]
+	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
+	public async void SeveralWorkers (ChannelDeliveryMode deliveryMode)
 	{
+		configuration.Mode = deliveryMode;
 		string workerID = "myWorkerID";
 
 		string topic1 = "topic1";
@@ -94,7 +103,4 @@ public class WorkQueuesTests {
 		Assert.True (await tcsWorker1.Task);
 		Assert.False (tcsWorker2.Task.IsCompleted);
 	}
-
-	[Fact]
-	public void SlowFastWorker () { }
 }
