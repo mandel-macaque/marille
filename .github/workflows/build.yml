@@ -29,7 +29,7 @@ jobs:
       run: dotnet restore
 
     - name: Build
-      run: dotnet build --no-restore -c Release
+      run: dotnet build --no-restore
 
     - name: Test
       run: dotnet test --no-build --verbosity normal --logger trx --results-directory "TestResults"
@@ -41,6 +41,3 @@ jobs:
         path: TestResults
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
-
-    - name: Create the package
-      run: dotnet pack -c Release

@@ -16,5 +16,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Every time
-      run: echo "This is a test"
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - run: dotnet build --c Release
+
+    - name: Create the package
+      run: dotnet pack --c Release
