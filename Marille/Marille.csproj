@@ -20,7 +20,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         
         <IsPackable>true</IsPackable>
-        <PackAsTool>true</PackAsTool>
+        <PackAsTool>false</PackAsTool>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Description>
             Marille is thin layer on top of System.Threading.Channels that provides a in-process publisher/subscriber hub.
@@ -29,7 +29,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="../README.md" Pack="true" PackagePath="\"/>
+        <None Include="../README.md" Pack="true" PackagePath="/"/>
     </ItemGroup>
 
 </Project>
