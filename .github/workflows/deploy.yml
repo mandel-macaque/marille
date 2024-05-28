@@ -23,7 +23,7 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
-    - run: dotnet build --c Release
+    - run: dotnet build -c Release
 
     - name: Create the package
-      run: dotnet pack --c Release
+      run: dotnet pack -c Release
