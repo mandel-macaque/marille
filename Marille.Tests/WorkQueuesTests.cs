@@ -6,23 +6,6 @@ namespace Marille.Tests;
 // several consumers register to a queue and the compete
 // to consume an event.
 public class WorkQueuesTests {
-	struct WorkQueuesEvent (string Id);
-
-	record WorkDoneEvent (string WorkerId);
-
-	class FastWorker : IWorker<WorkQueuesEvent> {
-		public string Id { get; set; } = string.Empty;
-		public TaskCompletionSource<bool> Completion { get; private set; }
-
-		public FastWorker (string id, TaskCompletionSource<bool> tcs)
-		{
-			Id = id;
-			Completion = tcs;
-		}
-
-		public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
-			=> Task.FromResult (Completion.TrySetResult(true));
-	}
 
 	class SlowWorker : IWorker<WorkQueuesEvent> {
 		public string Id { get; set; } = string.Empty;
@@ -40,8 +23,6 @@ public class WorkQueuesTests {
 		}
 	}
 
-	class WorkQueuesTestHub : Hub { }
-
 	Hub _hub;
 	TopicConfiguration configuration;
 	readonly CancellationTokenSource cancellationTokenSource;
@@ -50,7 +31,7 @@ public class WorkQueuesTests {
 	{
 		// use a simpler channel that we will use to receive the events when
 		// a worker has completed its work
-		_hub = new WorkQueuesTestHub ();
+		_hub = new ();
 		configuration = new() { Mode = ChannelDeliveryMode.AtMostOnce };
 		cancellationTokenSource = new();
 		cancellationTokenSource.CancelAfter (TimeSpan.FromSeconds (10));

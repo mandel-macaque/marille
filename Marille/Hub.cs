@@ -6,8 +6,7 @@ namespace Marille;
 /// <summary>
 /// 
 /// </summary>
-public abstract class Hub {
-	readonly Random rnd = new();
+public class Hub {
 	readonly Dictionary<string, Topic> topics = new();
 	readonly Dictionary<(string Topic, Type Type), CancellationTokenSource> cancellationTokenSources = new();
 	readonly Dictionary<(string Topic, Type type), List<object>> workers = new();
@@ -47,10 +46,9 @@ public abstract class Hub {
 					});
 					break;
 				default:
-					// dumb algo atm, picking one at random, initialWorkers can have
-					// state
-					var index = (workersArray.Length == 1) ? 0 : rnd.Next (workersArray.Length);
-					var worker = workersArray [index];
+					// we do know we are not empty, and in the AtMostOnce mode we will only use the first worker
+					// present
+					var worker = workersArray [0];
 					CancellationToken token = default;
 					if (configuration.Timeout.HasValue) {
 						var cts = new CancellationTokenSource ();
@@ -132,6 +130,9 @@ public abstract class Hub {
 	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
 		IEnumerable<IWorker<T>> initialWorkers) where T : struct
 	{
+		if (configuration.Mode == ChannelDeliveryMode.AtMostOnce && initialWorkers.Count () > 1)
+			return false;
+
 		// the topic might already have the channel, in that case, do nothing
 		Type type = typeof (T);
 		if (!topics.TryGetValue (topicName, out Topic? topic)) {
@@ -140,7 +141,7 @@ public abstract class Hub {
 		}
 
 		if (!workers.ContainsKey ((topicName, type))) {
-			workers [(topicName, type)] = new List<object> (initialWorkers);
+			workers [(topicName, type)] = new(initialWorkers);
 		}
 
 		if (topic.TryGetChannel<T> (out _)) {
@@ -177,15 +178,20 @@ public abstract class Hub {
 	/// messages while this operation takes place because messages will be buffered by the channel.</remarks>
 	public Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
 	{
+		var type = typeof (T);
 		// we only allow the client to register to an existing topic
 		// in this API we will not create it, there are other APIs for that
 		if (!TryGetChannel<T> (topicName, out var ch))
 			return Task.FromResult(false);
 
+		// do not allow to add more than one worker ig we are in AtMostOnce mode.
+		if (ch.Configuration.Mode == ChannelDeliveryMode.AtMostOnce && workers [(topicName, type)].Count >= 1)
+			return Task.FromResult (false);
+
 		// we will have to stop consuming while we add the new worker
 		// but we do not need to close the channel, the API will buffer
 		StopConsuming<T> (topicName);
-		workers [(topicName, typeof (T))].AddRange (newWorkers);
+		workers [(topicName, type)].AddRange (newWorkers);
 		return StartConsuming (topicName, ch.Configuration, ch.Channel);
 	}
 
