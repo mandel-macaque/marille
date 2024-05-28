@@ -8,7 +8,7 @@ internal class Topic (string name) {
 
 	public string Name { get; } = name;
 
-	public bool TryGetChannel<T> ([NotNullWhen (true)] out TopicInfo<T>? channel)
+	public bool TryGetChannel<T> ([NotNullWhen (true)] out TopicInfo<T>? channel) where T : class
 	{
 		Type type = typeof (T);
 		channel = null;
@@ -18,7 +18,7 @@ internal class Topic (string name) {
 		return true;
 	}
 
-	public Channel<Message<T>> CreateChannel<T> (TopicConfiguration configuration)
+	public Channel<Message<T>> CreateChannel<T> (TopicConfiguration configuration) where T : class
 	{
 		Type type = typeof (T);
 		if (!channels.TryGetValue (type, out var obj)) {
@@ -31,7 +31,7 @@ internal class Topic (string name) {
 		return (obj.Channel as Channel<Message<T>>)!;
 	}
 
-	public void CloseChannel<T> ()
+	public void CloseChannel<T> () where T : class
 	{
 		// stop the channel from receiving events, this means that
 		// eventually our dispatchers will complete
