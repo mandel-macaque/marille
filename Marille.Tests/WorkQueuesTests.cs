@@ -6,7 +6,7 @@ namespace Marille.Tests;
 // several consumers register to a queue and the compete
 // to consume an event.
 public class WorkQueuesTests {
-	record WorkQueuesEvent (string Id);
+	struct WorkQueuesEvent (string Id);
 
 	record WorkDoneEvent (string WorkerId);
 

@@ -15,7 +15,7 @@ public abstract class Hub {
 	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
 	
 	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IWorker<T>[] workersArray, 
-		TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken) where T : class
+		TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken) where T : struct
 	{
 		// this is an important check, else the items will be consumer with no worker to receive them
 		if (workersArray.Length == 0) {
@@ -40,7 +40,7 @@ public abstract class Hub {
 							cts.CancelAfter (configuration.Timeout.Value);
 							token = cts.Token;
 						}
-						_ = worker.ConsumeAsync (item.Payload, token)
+						_ = worker.ConsumeAsync (item.Payload.Value, token)
 							.ContinueWith ((t) => { ch.Writer.WriteAsync (item); }, TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
 							.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new WorkerError (typeof(T), worker, t.Exception)), 
 								TaskContinuationOptions.OnlyOnFaulted);
@@ -57,7 +57,7 @@ public abstract class Hub {
 						cts.CancelAfter (configuration.Timeout.Value);
 						token = cts.Token;
 					}
-					_ = worker.ConsumeAsync (item.Payload, token)
+					_ = worker.ConsumeAsync (item.Payload.Value, token)
 						.ContinueWith ((t) => { ch.Writer.WriteAsync (item); },
 							TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
 						.ContinueWith (
@@ -71,7 +71,7 @@ public abstract class Hub {
 	}
 
 	Task<bool> StartConsuming<T> (string topicName, TopicConfiguration configuration, Channel<Message<T>> channel)
-		where T : class 
+		where T : struct
 	{
 		Type type = typeof (T);
 		// we want to be able to cancel the thread that we are using to consume the
@@ -93,7 +93,7 @@ public abstract class Hub {
 		return completionSource.Task;
 	}
 
-	void StopConsuming<T> (string topicName) where T : class
+	void StopConsuming<T> (string topicName) where T : struct
 	{
 		Type type = typeof (T);
 		if (!cancellationTokenSources.TryGetValue ((topicName, type), out CancellationTokenSource? cancellationToken))
@@ -103,7 +103,7 @@ public abstract class Hub {
 		cancellationTokenSources.Remove ((topicName, type));
 	}
 
-	bool TryGetChannel<T> (string topicName, [NotNullWhen(true)] out TopicInfo<T>? ch) where T : class
+	bool TryGetChannel<T> (string topicName, [NotNullWhen(true)] out TopicInfo<T>? ch) where T : struct
 	{
 		ch = null;
 		if (!topics.TryGetValue (topicName, out Topic? topic)) {
@@ -130,7 +130,7 @@ public abstract class Hub {
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
 	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
-		IEnumerable<IWorker<T>> initialWorkers) where T : class
+		IEnumerable<IWorker<T>> initialWorkers) where T : struct
 	{
 		// the topic might already have the channel, in that case, do nothing
 		Type type = typeof (T);
@@ -162,7 +162,7 @@ public abstract class Hub {
 	/// <param name="configuration">The configuration to use for the channel creation.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
-	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration) where T : class
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration) where T : struct
 		=> CreateAsync (topicName, configuration, Array.Empty<IWorker<T>> ());
 
 	public bool TryCreateAndRegister<T> (string topicName) => false;
@@ -177,7 +177,7 @@ public abstract class Hub {
 	/// <remarks>Workers can be added to channels that are already being processed. The Hub will pause the consumtion
 	/// of the messages while it adds the worker and will resume the processing after. Producer can be sending
 	/// messages while this operation takes place because messages will be buffered by the channel.</remarks>
-	public Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : class
+	public Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
 	{
 		// we only allow the client to register to an existing topic
 		// in this API we will not create it, there are other APIs for that
@@ -191,10 +191,10 @@ public abstract class Hub {
 		return StartConsuming (topicName, ch.Configuration, ch.Channel);
 	}
 
-	public Task<bool> RegisterAsync<T> (string topicName, Func<T, CancellationToken, Task> action)  where T : class
+	public Task<bool> RegisterAsync<T> (string topicName, Func<T, CancellationToken, Task> action)  where T : struct
 		=> RegisterAsync (topicName, new LambdaWorker<T> (action));
 
-	public ValueTask Publish<T> (string topicName, T publishedEvent) where T : class
+	public ValueTask Publish<T> (string topicName, T publishedEvent) where T : struct
 	{
 		if (!TryGetChannel<T> (topicName, out var ch))
 			throw new InvalidOperationException (
