@@ -126,7 +126,7 @@ public abstract class Hub {
 	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
 	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
 	/// <param name="configuration">The configuration to use for the channel creation.</param>
-	/// <param name="initialWorkers">Original set of IWoker<T> to be assigned the channel on creation.</param>
+	/// <param name="initialWorkers">Original set of IWorker&lt;T&gt; to be assigned the channel on creation.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
 	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
@@ -165,8 +165,6 @@ public abstract class Hub {
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration) where T : struct
 		=> CreateAsync (topicName, configuration, Array.Empty<IWorker<T>> ());
 
-	public bool TryCreateAndRegister<T> (string topicName) => false;
-	
 	/// <summary>
 	/// Attempts to register new workers to consume messages for the given topic.
 	/// </summary>
@@ -191,9 +189,29 @@ public abstract class Hub {
 		return StartConsuming (topicName, ch.Configuration, ch.Channel);
 	}
 
+	/// <summary>
+	/// Adds a new lambda based worker to the topic allowing it to consume messages.
+	/// </summary>
+	/// <param name="topicName">The topic name that will deliver messages to the worker.</param>
+	/// <param name="action">The lambda that will be executed per messages received.</param>
+	/// <typeparam name="T">The type of messages of the topic.</typeparam>
+	/// <returns>true if the worker could be added.</returns>
+	/// <remarks>Workers can be added to channels that are already being processed. The Hub will pause the consumtion
+	/// of the messages while it adds the worker and will resume the processing after. Producer can be sending
+	/// messages while this operation takes place because messages will be buffered by the channel.</remarks>
 	public Task<bool> RegisterAsync<T> (string topicName, Func<T, CancellationToken, Task> action)  where T : struct
 		=> RegisterAsync (topicName, new LambdaWorker<T> (action));
 
+	/// <summary>
+	/// Allows to publish a message in a given topic. The message will be added to a channel and will be
+	/// consumed by any worker that might have been added.
+	/// </summary>
+	/// <param name="topicName">The topic name that will deliver messages to the worker.</param>
+	/// <param name="publishedEvent">The message to be publish in the topic.</param>
+	/// <typeparam name="T">The type of messages of the topic.</typeparam>
+	/// <returns>true of the message was delivered to the topic.</returns>
+	/// <exception cref="InvalidOperationException">Thrown if no topic can be found with the provided
+	/// (topicName, messageType) combination.</exception>
 	public ValueTask Publish<T> (string topicName, T publishedEvent) where T : struct
 	{
 		if (!TryGetChannel<T> (topicName, out var ch))
