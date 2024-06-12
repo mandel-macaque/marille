@@ -9,6 +9,15 @@ on:
     branches:
       - main
       - release/**
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+env:
+  NuGetDirectory: ${{ github.workspace}}/nuget
+
+defaults:
+  run:
+    shell: pwsh
 
 jobs:
   build:
@@ -23,45 +32,93 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
-    - run: dotnet build -c Release
+    - name: Set VERSION variable from tag
+      run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
+
+    - run: dotnet build -c Release /p:Version=${VERSION}
 
     - name: Create the package
-      run: dotnet pack -c Release -o .
+      run: dotnet pack -c Release -o ${{ env.NuGetDirectory }}
 
     - name: Upload Package for Publishing
       uses: actions/upload-artifact@v4
       with:
-        name: PackedLib
-        path: ./*.nupkg
+        name: nuget
+        if-no-files-found: error
+        retention-days: 7
+        path: ${{ env.NuGetDirectory }}/*.nupkg
+
+  validate-nuget:
+    name: Validate nuget
+    runs-on: ubuntu-latest
+    needs: [ build ]
+
+    steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Download built project
+      uses: actions/download-artifact@v4
+      with:
+        name: nuget
+        path: ${{ env.NuGetDirectory }}
+
+    - name: Install nuget validator
+      run: dotnet tool update Meziantou.Framework.NuGetPackageValidation.Tool --global
+
+    - name: Validate package
+        run: meziantou.validate-nuget-package (Get-ChildItem "${{ env.NuGetDirectory }}/*.nupkg")
 
   github-publish:
-    needs: build
+    needs: [ build, validate-nuget ]
     name: Publish to Github
     runs-on: ubuntu-latest
 
     steps:
+    - name: Set VERSION variable from tag
+      run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
+
     - name: Download built project
       uses: actions/download-artifact@v4
       with:
-        name: PackedLib
+        name: nuget
+        path: ${{ env.NuGetDirectory }}
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+
+    - name: Publish NuGet package
+      run: |
+        foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg)) {
+            dotnet nuget push $file --api-key "${{ secrets.GITHUB_TOKEN }}" --source https://nuget.pkg.github.com/acraven/index.json --skip-duplicate
+        }
 
   nuget-publish:
-    needs: build
-    name: Publish to Github
+    needs: [ build, validate-nuget ]
+    name: Publish to Nuget.org
     runs-on: ubuntu-latest
 
     steps:
+    - name: Set VERSION variable from tag
+      run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
+
     - name: Download built project
       uses: actions/download-artifact@v4
       with:
-        name: PackedLib
+        name: nuget
+        path: ${{ env.NuGetDirectory }}
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+
+    - name: Publish NuGet package
+      run: |
+        foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg)) {
+            dotnet nuget push $file --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        }
