@@ -33,11 +33,15 @@ jobs:
         dotnet-version: 8.0.x
 
     - name: Set VERSION variable from tag
+      shell: bash
       run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
 
-    - run: dotnet build -c Release /p:Version=${VERSION}
+    - name: Build project
+      shell: bash
+      run: dotnet build -c Release /p:Version=${VERSION}
 
     - name: Create the package
+      shell: bash
       run: dotnet pack -c Release -o ${{ env.NuGetDirectory }}
 
     - name: Upload Package for Publishing
@@ -77,9 +81,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set VERSION variable from tag
-      run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
-
     - name: Download built project
       uses: actions/download-artifact@v4
       with:
@@ -103,9 +104,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set VERSION variable from tag
-      run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
-
     - name: Download built project
       uses: actions/download-artifact@v4
       with:
