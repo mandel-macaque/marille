@@ -29,7 +29,7 @@ consumer.
 
 ```csharp
 // define a message type to consumer
-public record MyMessage (string Id, string Operation, int Value);
+public record struct MyMessage (string Id, string Operation, int Value);
 
 // create a worker type with the minimum implementation 
 class MyWorker : IWorker<MyMessage> {
