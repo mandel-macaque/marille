@@ -5,6 +5,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <GenerateDocumentationFile>True</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -16,6 +18,7 @@
         <Copyright>Manuel de la Peña Saenz</Copyright>
         <Company>themacaque.com</Company>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/mandel-macaque/marille</PackageProjectUrl>
         <RepositoryUrl>https://github.com/mandel-macaque/marille</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
@@ -26,10 +29,18 @@
             Marille is thin layer on top of System.Threading.Channels that provides a in-process publisher/subscriber hub.
         </Description>
         <PackageTags>publisher;subscriber;pub/sub;channels;messaging queue;</PackageTags>
+        <EnablePackageValidation>true</EnablePackageValidation>
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="../README.md" Pack="true" PackagePath="/"/>
+        <None Include="../README.md" Pack="true" PackagePath="/" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="DotNet.ReproducibleBuilds" Version="1.1.1">
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        <PrivateAssets>all</PrivateAssets>
+      </PackageReference>
     </ItemGroup>
 
 </Project>
