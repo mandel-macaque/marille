@@ -6,7 +6,7 @@ namespace Marille;
 /// <summary>
 /// 
 /// </summary>
-public class Hub {
+public class Hub : IHub {
 	readonly Dictionary<string, Topic> topics = new();
 	readonly Dictionary<(string Topic, Type Type), CancellationTokenSource> cancellationTokenSources = new();
 	readonly Dictionary<(string Topic, Type type), List<object>> workers = new();
