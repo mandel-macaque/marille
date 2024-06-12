@@ -63,6 +63,7 @@ jobs:
       run: dotnet tool update Meziantou.Framework.NuGetPackageValidation.Tool --global
 
     - name: Validate package
+      shell: pwsh
       run: meziantou.validate-nuget-package (Get-ChildItem "${{ env.NuGetDirectory }}/*.nupkg")
 
   github-publish:
