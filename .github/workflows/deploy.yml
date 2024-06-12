@@ -87,7 +87,7 @@ jobs:
       shell: pwsh
       run: |
         foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg)) {
-            dotnet nuget push $file --api-key "${{ secrets.GITHUB_TOKEN }}" --source https://nuget.pkg.github.com/acraven/index.json --skip-duplicate
+            dotnet nuget push $file --api-key "${{ secrets.GITHUB_TOKEN }}" --source https://nuget.pkg.github.com/mandel-macaque/index.json --skip-duplicate
         }
 
   nuget-publish:
