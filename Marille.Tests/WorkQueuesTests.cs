@@ -25,7 +25,7 @@ public class WorkQueuesTests {
 	[Theory]
 	[InlineData(ChannelDeliveryMode.AtMostOnceAsync)]
 	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
-	public async void SingleWorker (ChannelDeliveryMode deliveryMode)
+	public async Task SingleWorker (ChannelDeliveryMode deliveryMode)
 	{
 		configuration.Mode = deliveryMode;
 		var topic = "topic";
@@ -40,7 +40,7 @@ public class WorkQueuesTests {
 	[Theory]
 	[InlineData(ChannelDeliveryMode.AtMostOnceAsync)]
 	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
-	public async void SingleAction (ChannelDeliveryMode deliveryMode)
+	public async Task SingleAction (ChannelDeliveryMode deliveryMode)
 	{
 		configuration.Mode = deliveryMode;
 		var topic = "topic";
@@ -57,7 +57,7 @@ public class WorkQueuesTests {
 	[Theory]
 	[InlineData(ChannelDeliveryMode.AtMostOnceAsync)]
 	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
-	public async void SeveralWorkers (ChannelDeliveryMode deliveryMode)
+	public async Task SeveralWorkers (ChannelDeliveryMode deliveryMode)
 	{
 		configuration.Mode = deliveryMode;
 		string workerID = "myWorkerID";
