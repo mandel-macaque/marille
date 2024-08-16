@@ -8,7 +8,7 @@ namespace Marille;
 /// </summary>
 public class Hub : IHub {
 	readonly Dictionary<string, Topic> topics = new();
-	readonly Dictionary<(string Topic, Type Type), CancellationTokenSource> cancellationTokenSources = new();
+	readonly Dictionary<(string Topic, Type Type), (CancellationTokenSource CancellationToken, Task? ConsumeTask)> cancellationTokenSources = new();
 	readonly Dictionary<(string Topic, Type type), List<object>> workers = new();
 	
 	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
@@ -97,25 +97,45 @@ public class Hub : IHub {
 		//    in which we are running a thread and try to modify a collection, 
 		//    we cancel the thread, use the channel as a buffer and do the changes
 		var cancellationToken = new CancellationTokenSource ();
-		cancellationTokenSources [(topicName, type)] = cancellationToken;
 		var workersCopy = workers[(topicName, type)].Select (x => (IWorker<T>)x).ToArray ();
 
 		// we have no interest in awaiting for this task, but we want to make sure it started. To do so
 		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
 		var completionSource = new TaskCompletionSource<bool>();
-		_ = ConsumeChannel (configuration, channel, workersCopy, completionSource, cancellationToken.Token);
+		var consumeTask = ConsumeChannel (configuration, channel, workersCopy, completionSource, cancellationToken.Token);
+		cancellationTokenSources [(topicName, type)] = (cancellationToken, consumeTask); 
 		// send a message with a ack so that we can ensure we are indeed running
-		_ = channel.Writer.WriteAsync (new Message<T> (MessageType.Ack));
+		_ = channel.Writer.WriteAsync (new Message<T> (MessageType.Ack), cancellationToken.Token);
 		return completionSource.Task;
 	}
 
 	void StopConsuming<T> (string topicName) where T : struct
 	{
 		Type type = typeof (T);
-		if (!cancellationTokenSources.TryGetValue ((topicName, type), out CancellationTokenSource? cancellationToken))
+		if (!cancellationTokenSources.TryGetValue ((topicName, type), out var consumingInfo))
 			return;
 
-		cancellationToken.Cancel ();
+		consumingInfo.CancellationToken.Cancel ();
+		cancellationTokenSources.Remove ((topicName, type));
+	}
+
+	async Task StopConsumingAsync <T> (string topicName) where T : struct
+	{
+		Type type = typeof (T);
+		if (!cancellationTokenSources.TryGetValue ((topicName, type), out var consumingInfo))
+			return;
+		
+		if (!TryGetChannel<T> (topicName, out var ch))
+			return;
+
+		// complete the channels, this wont throw an cancellation exception, it will stop the channels from writing
+		// and the consuming task will finish when it is done with the current message, therefore we can
+		// use that to know when we are done
+		ch.Channel.Writer.Complete ();
+		if (consumingInfo.ConsumeTask is not null)
+			await consumingInfo.ConsumeTask;
+
+		// clean behind us
 		cancellationTokenSources.Remove ((topicName, type));
 	}
 
@@ -287,5 +307,50 @@ public class Hub : IHub {
 				$"Channel with topic {topicName} for event type {typeof(T)} not found");
 		var message = new Message<T> (MessageType.Data, publishedEvent);
 		return ch.Channel.Writer.WriteAsync (message);
+	}
+
+	/// <summary>
+	/// Cancel all channels in the Hub and return a task that will be completed once all the channels have been flushed.
+	/// </summary>
+	/// <returns>A task that will be completed once ALL the channels have been flushed.</returns>
+	public async Task CloseAllAsync ()
+	{
+		// we are using this format to ensure that we have the right nullable types, if we where to use the following
+		// 
+		// var consumingTasks = cancellationTokenSources.Values
+		//	.Select (x => x.ConsumeTask).Where (x => x is not null).ToArray ();
+		// 
+		// the compiler will force use to later do 
+		//
+		// `Task.WhenAll (consumingTasks!);` 
+		//
+		// suppressing the warning is ugly when we do know how to help the compiler ;)
+		
+		var consumingTasks  = from consumeInfo in cancellationTokenSources.Values
+			where consumeInfo.ConsumeTask is not null
+			select consumeInfo.ConsumeTask;
+		// remove the need of a second loop by getting the cancellation tokens cancelled
+		var cancellationTasks = cancellationTokenSources.Values
+			.Select (x => x.CancellationToken.CancelAsync ());
+		
+		// we could do a nested Task.WhenAll but we want to ensure that the cancellation tasks are done before
+		await Task.WhenAll (cancellationTasks);
+		await Task.WhenAll (consumingTasks);
+	}
+
+	/// <summary>
+	/// Cancels the channel in the Hub with the given token and returns a task that will be completed once the channel
+	/// has been flushed. 
+	/// </summary>
+	/// <param name="topicName">The name of the topic to cancel.</param>
+	/// <typeparam name="T">The type of events of the topic.</typeparam>
+	/// <returns>A task that will be completed once the channel has been flushed.</returns>
+	public async Task<bool> CloseAsync<T> (string topicName) where T : struct
+	{
+		// ensure that the channels does exist, if not, return false
+		if (!TryGetChannel<T> (topicName, out _))
+			return false;
+		await StopConsumingAsync<T> (topicName);
+		return true;
 	}
 }
