@@ -71,3 +71,17 @@ return _hub.CreateAsync (topic, configuration, worker);
 public Task ProduceMessage (string id, string operation, int value) =>
     _hub.Publish (topic, new MyMessage (di, operation, value));
 ```
+
+4. Cancel and wait for events to be completed
+
+Becasue the entire library puspose of the library is to be able to process 
+events in a multithreaded manner, the main thread has to wait until the events
+are processed. That can be done by waiting on a Channel to be closed:
+
+```csharp
+// close a specific topic
+await _hub.CloseAsync<WorkQueuesEvent> (topic);
+
+// close all topcis
+await _hub.CloseAsync<WorkQueuesEvent> (topic1);
+```
