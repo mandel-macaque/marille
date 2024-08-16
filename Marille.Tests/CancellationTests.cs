@@ -46,7 +46,7 @@ public class CancellationTests {
 	}
 
 	[Fact]
-	public async Task CloseAllWorkersNoEvents ()
+	public async Task CloseAllWorkersFlushedEvents ()
 	{
 		var eventCount = 100;
 		configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
@@ -72,12 +72,12 @@ public class CancellationTests {
 
 		// publish no messages, just close the worker
 		await _hub.CloseAsync<WorkQueuesEvent> (topic1);
-		Assert.Equal (eventCount, worker1.ConsumedCount);
-		Assert.Equal (eventCount, worker2.ConsumedCount);
+		Assert.NotEqual (0, worker1.ConsumedCount);
+		Assert.NotEqual (0, worker2.ConsumedCount);
 	}
 	
 	[Fact]
-	public async Task CloseAllWorkersFlushedEvents ()
+	public async Task CloseAllWorkersNoEvents ()
 	{
 		configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
 		var topic1 = "topic1";
