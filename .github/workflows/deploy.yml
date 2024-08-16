@@ -1,3 +1,4 @@
+# yamllint disable rule:line-length
 # deployes the build to nuget and github releases
 name: Continuous Deployment
 
@@ -18,80 +19,80 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
 
-    - name: Set Version Variable
-      if: ${{ github.ref_type == 'tag' }}
-      env:
-        TAG: ${{ github.ref_name }}
-      run: echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+      - name: Set Version Variable
+        if: ${{ github.ref_type == 'tag' }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "VERSION=${TAG#v}" >> $GITHUB_ENV
 
-    - name: Build project
-      run: dotnet build -c Release /p:Version=$VERSION
+      - name: Build project
+        run: dotnet build -c Release /p:Version=$VERSION
 
-    - name: Create the package
-      run: dotnet pack -c Release -o ${{ env.NuGetDirectory }} /p:PackageVersion=$VERSION
+      - name: Create the package
+        run: dotnet pack -c Release -o ${{ env.NuGetDirectory }} /p:PackageVersion=$VERSION
 
-    - name: Upload Package for Publishing
-      uses: actions/upload-artifact@v4
-      with:
-        name: nuget
-        if-no-files-found: error
-        retention-days: 7
-        path: ${{ env.NuGetDirectory }}/*.nupkg
+      - name: Upload Package for Publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget
+          if-no-files-found: error
+          retention-days: 7
+          path: ${{ env.NuGetDirectory }}/*.nupkg
 
   validate-nuget:
     name: Validate nuget
     runs-on: ubuntu-latest
-    needs: [ build ]
+    needs: [build]
 
     steps:
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
 
-    - name: Download built project
-      uses: actions/download-artifact@v4
-      with:
-        name: nuget
-        path: ${{ env.NuGetDirectory }}
+      - name: Download built project
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget
+          path: ${{ env.NuGetDirectory }}
 
-    - name: Install nuget validator
-      run: dotnet tool update Meziantou.Framework.NuGetPackageValidation.Tool --global
+      - name: Install nuget validator
+        run: dotnet tool update Meziantou.Framework.NuGetPackageValidation.Tool --global
 
-    - name: Validate package
-      shell: pwsh
-      run: meziantou.validate-nuget-package (Get-ChildItem "${{ env.NuGetDirectory }}/*.nupkg") --excluded-rules IconMustBeSet
+      - name: Validate package
+        shell: pwsh
+        run: meziantou.validate-nuget-package (Get-ChildItem "${{ env.NuGetDirectory }}/*.nupkg") --excluded-rules IconMustBeSet
 
   github-publish:
-    needs: [ build, validate-nuget ]
+    needs: [build, validate-nuget]
     name: Publish to Github
     runs-on: ubuntu-latest
 
     steps:
-    - name: Download built project
-      uses: actions/download-artifact@v4
-      with:
-        name: nuget
-        path: ${{ env.NuGetDirectory }}
+      - name: Download built project
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget
+          path: ${{ env.NuGetDirectory }}
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
 
-    - name: Publish NuGet package
-      shell: pwsh
-      run: |
-        foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg)) {
-            dotnet nuget push $file --api-key "${{ secrets.GITHUB_TOKEN }}" --source https://nuget.pkg.github.com/mandel-macaque/index.json --skip-duplicate
-        }
+      - name: Publish NuGet package
+        shell: pwsh
+        run: |
+          foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg)) {
+              dotnet nuget push $file --api-key "${{ secrets.GITHUB_TOKEN }}" --source https://nuget.pkg.github.com/mandel-macaque/index.json --skip-duplicate
+          }
 
   nuget-publish:
     needs: [ build, validate-nuget ]
