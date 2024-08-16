@@ -6,23 +6,6 @@ namespace Marille.Tests;
 // several consumers register to a queue and the compete
 // to consume an event.
 public class WorkQueuesTests {
-
-	class SlowWorker : IWorker<WorkQueuesEvent> {
-		public string Id { get; set; } = string.Empty;
-		public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
-		{
-			throw new NotImplementedException ();
-		}
-	}
-	
-	class ExceptionWorker : IWorker<WorkQueuesEvent> {
-		public string Id { get; set; } = string.Empty;
-		public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
-		{
-			throw new NotImplementedException ();
-		}
-	}
-
 	Hub _hub;
 	TopicConfiguration configuration;
 	readonly CancellationTokenSource cancellationTokenSource;
