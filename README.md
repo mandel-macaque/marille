@@ -34,7 +34,7 @@ public record struct MyMessage (string Id, string Operation, int Value);
 // create a worker type with the minimum implementation 
 class MyWorker : IWorker<MyMessage> {
     // Workers will be scheduled by the default TaskScheduler from dotnet
-    public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
+    public Task ConsumeAsync (MyMessage message, CancellationToken cancellationToken = default)
        => Task.FromResult (Completion.TrySetResult(true));
 }
 
@@ -80,8 +80,8 @@ are processed. That can be done by waiting on a Channel to be closed:
 
 ```csharp
 // close a specific topic
-await _hub.CloseAsync<WorkQueuesEvent> (topic);
+await _hub.CloseAsync<MyMessage> (topic);
 
 // close all topcis
-await _hub.CloseAsync<WorkQueuesEvent> (topic1);
+await _hub.CloseAsync<MyMessage> (topic1);
 ```
