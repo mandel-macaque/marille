@@ -7,11 +7,17 @@ namespace Marille;
 /// 
 /// </summary>
 public class Hub : IHub {
+	readonly SemaphoreSlim semaphoreSlim = new(1);
 	readonly Dictionary<string, Topic> topics = new();
 	readonly Dictionary<(string Topic, Type Type), (CancellationTokenSource CancellationToken, Task? ConsumeTask)> cancellationTokenSources = new();
 	readonly Dictionary<(string Topic, Type type), List<object>> workers = new();
-	
 	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
+
+	public Hub () : this (new SemaphoreSlim (1))  { }
+	internal Hub (SemaphoreSlim semaphore)
+	{
+		semaphoreSlim = semaphore;
+	} 
 	
 	void DeliverAtLeastOnce<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item, TimeSpan? timeout)
 		where T : struct
@@ -125,24 +131,27 @@ public class Hub : IHub {
 		if (!cancellationTokenSources.TryGetValue ((topicName, type), out var consumingInfo))
 			return;
 		
-		if (!TryGetChannel<T> (topicName, out var ch))
+		if (!TryGetChannel<T> (topicName, out var topic, out _))
 			return;
 
 		// complete the channels, this wont throw an cancellation exception, it will stop the channels from writing
 		// and the consuming task will finish when it is done with the current message, therefore we can
 		// use that to know when we are done
-		ch.Channel.Writer.Complete ();
+		topic.CloseChannel<T> ();
 		if (consumingInfo.ConsumeTask is not null)
 			await consumingInfo.ConsumeTask;
 
 		// clean behind us
+		topic.RemoveChannel<T> ();
+		workers.Remove ((topicName, type));
 		cancellationTokenSources.Remove ((topicName, type));
 	}
 
-	bool TryGetChannel<T> (string topicName, [NotNullWhen(true)] out TopicInfo<T>? ch) where T : struct
+	bool TryGetChannel<T> (string topicName, [NotNullWhen(true)] out Topic? topic, [NotNullWhen(true)] out TopicInfo<T>? ch) where T : struct
 	{
+		topic = null;
 		ch = null;
-		if (!topics.TryGetValue (topicName, out Topic? topic)) {
+		if (!topics.TryGetValue (topicName, out topic)) {
 			return false;
 		}
 
@@ -173,21 +182,27 @@ public class Hub : IHub {
 
 		// the topic might already have the channel, in that case, do nothing
 		Type type = typeof (T);
-		if (!topics.TryGetValue (topicName, out Topic? topic)) {
-			topic = new(topicName);
-			topics [topicName] = topic;
-		}
+		await semaphoreSlim.WaitAsync ();
+		try {
+			if (!topics.TryGetValue (topicName, out Topic? topic)) {
+				topic = new(topicName);
+				topics [topicName] = topic;
+			}
 
-		if (!workers.ContainsKey ((topicName, type))) {
-			workers [(topicName, type)] = new(initialWorkers);
-		}
+			if (!workers.ContainsKey ((topicName, type))) {
+				workers [(topicName, type)] = new(initialWorkers);
+			}
 
-		if (topic.TryGetChannel<T> (out _)) {
-			return false;
+			if (topic.TryGetChannel<T> (out _)) {
+				return false;
+			}
+
+			var ch = topic.CreateChannel<T> (configuration);
+			await StartConsuming (topicName, configuration, ch);
+			return true;
+		} finally {
+			semaphoreSlim.Release ( );
 		}
-		var ch = topic.CreateChannel<T> (configuration);
-		await StartConsuming (topicName, configuration, ch);
-		return true;
 	}
 
 	/// <summary>
@@ -258,23 +273,28 @@ public class Hub : IHub {
 	/// <remarks>Workers can be added to channels that are already being processed. The Hub will pause the consumtion
 	/// of the messages while it adds the worker and will resume the processing after. Producer can be sending
 	/// messages while this operation takes place because messages will be buffered by the channel.</remarks>
-	public Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
+	public async Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
 	{
 		var type = typeof (T);
-		// we only allow the client to register to an existing topic
-		// in this API we will not create it, there are other APIs for that
-		if (!TryGetChannel<T> (topicName, out var ch))
-			return Task.FromResult(false);
+		await semaphoreSlim.WaitAsync ();
+		try {
+			// we only allow the client to register to an existing topic
+			// in this API we will not create it, there are other APIs for that
+			if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
+				return false;
 
-		// do not allow to add more than one worker ig we are in AtMostOnce mode.
-		if (ch.Configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && workers [(topicName, type)].Count >= 1)
-			return Task.FromResult (false);
+			// do not allow to add more than one worker ig we are in AtMostOnce mode.
+			if (topicInfo.Configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && workers [(topicName, type)].Count >= 1)
+				return false;
 
-		// we will have to stop consuming while we add the new worker
-		// but we do not need to close the channel, the API will buffer
-		StopConsuming<T> (topicName);
-		workers [(topicName, type)].AddRange (newWorkers);
-		return StartConsuming (topicName, ch.Configuration, ch.Channel);
+			// we will have to stop consuming while we add the new worker
+			// but we do not need to close the channel, the API will buffer
+			StopConsuming<T> (topicName);
+			workers [(topicName, type)].AddRange (newWorkers);
+			return await StartConsuming (topicName, topicInfo.Configuration, topicInfo.Channel);
+		} finally {
+			semaphoreSlim.Release ();
+		}
 	}
 
 	/// <summary>
@@ -302,11 +322,11 @@ public class Hub : IHub {
 	/// (topicName, messageType) combination.</exception>
 	public ValueTask Publish<T> (string topicName, T publishedEvent) where T : struct
 	{
-		if (!TryGetChannel<T> (topicName, out var ch))
+		if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
 			throw new InvalidOperationException (
 				$"Channel with topic {topicName} for event type {typeof(T)} not found");
 		var message = new Message<T> (MessageType.Data, publishedEvent);
-		return ch.Channel.Writer.WriteAsync (message);
+		return topicInfo.Channel.Writer.WriteAsync (message);
 	}
 
 	/// <summary>
@@ -325,17 +345,21 @@ public class Hub : IHub {
 		// `Task.WhenAll (consumingTasks!);` 
 		//
 		// suppressing the warning is ugly when we do know how to help the compiler ;)
-		
-		var consumingTasks  = from consumeInfo in cancellationTokenSources.Values
-			where consumeInfo.ConsumeTask is not null
-			select consumeInfo.ConsumeTask;
-		// remove the need of a second loop by getting the cancellation tokens cancelled
-		var cancellationTasks = cancellationTokenSources.Values
-			.Select (x => x.CancellationToken.CancelAsync ());
-		
-		// we could do a nested Task.WhenAll but we want to ensure that the cancellation tasks are done before
-		await Task.WhenAll (cancellationTasks);
-		await Task.WhenAll (consumingTasks);
+		await semaphoreSlim.WaitAsync ();
+		try {
+			var consumingTasks = from consumeInfo in cancellationTokenSources.Values
+				where consumeInfo.ConsumeTask is not null
+				select consumeInfo.ConsumeTask;
+			// remove the need of a second loop by getting the cancellation tokens cancelled
+			var cancellationTasks = cancellationTokenSources.Values
+				.Select (x => x.CancellationToken.CancelAsync ());
+
+			// we could do a nested Task.WhenAll but we want to ensure that the cancellation tasks are done before
+			await Task.WhenAll (cancellationTasks);
+			await Task.WhenAll (consumingTasks);
+		} finally {
+			semaphoreSlim.Release ();
+		}
 	}
 
 	/// <summary>
@@ -347,10 +371,15 @@ public class Hub : IHub {
 	/// <returns>A task that will be completed once the channel has been flushed.</returns>
 	public async Task<bool> CloseAsync<T> (string topicName) where T : struct
 	{
-		// ensure that the channels does exist, if not, return false
-		if (!TryGetChannel<T> (topicName, out _))
-			return false;
-		await StopConsumingAsync<T> (topicName);
-		return true;
+		await semaphoreSlim.WaitAsync ();
+		try {
+			// ensure that the channels does exist, if not, return false
+			if (!TryGetChannel<T> (topicName, out _, out _))
+				return false;
+			await StopConsumingAsync<T> (topicName);
+			return true;
+		} finally {
+			semaphoreSlim.Release ();
+		}
 	}
 }
