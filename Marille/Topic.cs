@@ -40,7 +40,8 @@ internal class Topic (string name) {
 	}
 
 	public bool ContainsChannel<T> ()
-	{
-		return channels.ContainsKey (typeof (T));
-	}
+		=> channels.ContainsKey (typeof (T));
+
+	public bool RemoveChannel<T> ()
+		=> channels.Remove (typeof (T));
 }

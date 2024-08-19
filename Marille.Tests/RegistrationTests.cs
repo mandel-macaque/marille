@@ -3,10 +3,12 @@ namespace Marille.Tests;
 public class RegistrationTests {
 
 	Hub _hub;
+	SemaphoreSlim _semaphoreSlim;
 
 	public RegistrationTests ()
 	{
-		_hub = new ();
+		_semaphoreSlim = new(1);
+		_hub = new (_semaphoreSlim);
 	} 
 
 	[Fact]
@@ -69,5 +71,51 @@ public class RegistrationTests {
 		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration);
 		Assert.True (await _hub.RegisterAsync (topic, worker1));
 		Assert.False(await _hub.RegisterAsync (topic, action));
+	}
+
+	[Fact]
+	public async Task MutithreadCreate ()
+	{
+		var threadCount = 100;
+		var results = new List<Task<bool>> (100);
+
+		Random random = new Random ();
+		var topic = nameof (MutithreadCreate );
+
+		TopicConfiguration configuration = new() { Mode = ChannelDeliveryMode.AtMostOnceAsync };
+
+		await _semaphoreSlim.WaitAsync ();
+		for (var index = 0; index < threadCount; index++) {
+			var tcs = new TaskCompletionSource<bool> ();
+			results.Add (tcs.Task);
+			// try to register from diff threads and ensure there are no unexpected issues
+			// this means that we DO NOT have two true values
+			// DO NOT AWAIT THE TASKS OR ELSE YOU WILL DEADLOCK
+			Task.Run (async () => {
+				// random sleep to ensure that the other thread is also trying to create
+				var sleep = random.Next (1000);
+				await Task.Delay (TimeSpan.FromMilliseconds (sleep));
+				var created = await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration);
+				tcs.TrySetResult (created);
+			});
+		}
+		
+		// release the semaphore so that we can move on
+		_semaphoreSlim.Release ();
+		var added = await Task.WhenAll (results);
+		bool? positive = null;
+		var finalResult = true;
+		// ensure that we have a true and a false, that means that an && should be false
+		for (var index = 0; index < threadCount; index++) {
+			finalResult &= added[index];
+			if (added[index] && positive is null) {
+				positive = true;
+				continue;
+			}
+			if (added[index] && positive is true) {
+				Assert.Fail ("More than one addition happened.");
+			}
+		}
+		Assert.False (finalResult);
 	}
 }

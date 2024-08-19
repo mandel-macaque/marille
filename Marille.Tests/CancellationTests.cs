@@ -3,11 +3,13 @@ namespace Marille.Tests;
 public class CancellationTests {
 
 	Hub _hub;
+	SemaphoreSlim _semaphoreSlim;
 	TopicConfiguration configuration;
 
 	public CancellationTests ()
 	{
-		_hub = new ();
+		_semaphoreSlim = new (1);
+		_hub = new (_semaphoreSlim);
 		configuration = new();
 	}
 	[Fact]
@@ -99,5 +101,55 @@ public class CancellationTests {
 		await _hub.CloseAsync<WorkQueuesEvent> (topic1);
 		Assert.Equal (0, worker1.ConsumedCount);
 		Assert.Equal (0, worker2.ConsumedCount);
+	}
+
+	[Fact]
+	public async Task MultithreadedClose ()
+	{
+		var threadCount = 100;
+		var results = new List<Task<bool>> (100);
+
+		Random random = new Random ();
+		
+		// create the topic and then try to close if from several threads ensuring that only one of them
+		// closes the channel.
+		configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		var topic = nameof (MultithreadedClose);
+		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration);
+		
+		// block the closing until we have created all the needed threads
+		await _semaphoreSlim.WaitAsync ();
+		
+		for (var index = 0; index < threadCount; index++) {
+			var tcs = new TaskCompletionSource<bool> ();
+			results.Add (tcs.Task);
+			// try to register from diff threads and ensure there are no unexpected issues
+			// this means that we DO NOT have two true values
+			// DO NOT AWAIT THE TASKS OR ELSE YOU WILL DEADLOCK
+			Task.Run (async () => {
+				// random sleep to ensure that the other thread is also trying to create
+				var sleep = random.Next (1000);
+				await Task.Delay (TimeSpan.FromMilliseconds (sleep));
+				var closed = await _hub.CloseAsync <WorkQueuesEvent> (topic);
+				tcs.TrySetResult (closed);
+			});
+		}
+		
+		_semaphoreSlim.Release ();
+		var closed = await Task.WhenAll (results);
+		bool? positive = null;
+		var finalResult = true;
+		// ensure that we have a true and a false, that means that an && should be false
+		for (var index = 0; index < threadCount; index++) {
+			finalResult &= closed[index];
+			if (closed[index] && positive is null) {
+				positive = true;
+				continue;
+			}
+			if (closed[index] && positive is true) {
+				Assert.Fail ("More than one close happened.");
+			}
+		}
+		Assert.False (finalResult);
 	}
 }
