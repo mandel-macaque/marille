@@ -4,7 +4,7 @@ using System.Threading.Channels;
 namespace Marille;
 
 internal class Topic (string name) {
-	readonly Dictionary<Type, (TopicConfiguration Configuration, object Channel)> channels = new();
+	readonly Dictionary<Type, object> channels = new();
 
 	public string Name { get; } = name;
 
@@ -14,29 +14,32 @@ internal class Topic (string name) {
 		channel = null;
 		if (!channels.TryGetValue (type, out var obj)) 
 			return false;
-		channel = new (obj.Configuration, (obj.Channel as Channel<Message<T>>)!);
-		return true;
+		channel = obj as TopicInfo<T>;
+		return channel is not null;
 	}
 
-	public Channel<Message<T>> CreateChannel<T> (TopicConfiguration configuration) where T : struct
+	public TopicInfo<T> CreateChannel<T> (TopicConfiguration configuration, params IWorker<T>[] workers) where T : struct
 	{
 		Type type = typeof (T);
-		if (!channels.TryGetValue (type, out var obj)) {
+		if (!TryGetChannel<T> (out var obj)) {
 			var ch = (configuration.Capacity is null) ? 
 				Channel.CreateUnbounded<Message<T>> () : Channel.CreateBounded<Message<T>> (configuration.Capacity.Value);
-			obj = new (configuration, ch);
+			obj = new(configuration, ch, workers);
 			channels[type] = obj; 
 		}
 
-		return (obj.Channel as Channel<Message<T>>)!;
+		return obj;
 	}
 
 	public void CloseChannel<T> () where T : struct
 	{
 		// stop the channel from receiving events, this means that
 		// eventually our dispatchers will complete
-		if (TryGetChannel<T> (out var chInfo)) 
-			chInfo.Channel.Writer.Complete ();
+		if (!TryGetChannel<T> (out var chInfo))
+			return;
+
+		chInfo.Channel.Writer.Complete ();
+		channels.Remove (typeof (T));
 	}
 
 	public bool ContainsChannel<T> ()
