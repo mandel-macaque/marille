@@ -29,7 +29,7 @@ public class PublishSubscribeTests {
 			workers.Add ((worker, tcs));
 		}
 		var topic = "topic";
-		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration, workers.Select (x => x.Worker));
+		await _hub.CreateAsync (topic, configuration, workers.Select (x => x.Worker));
 		// publish a single message that will be received by all workers meaning we should wait for ALL their
 		// task completion sources to be done
 		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));

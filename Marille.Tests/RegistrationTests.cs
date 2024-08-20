@@ -14,7 +14,7 @@ public class RegistrationTests {
 	[Fact]
 	public async Task SingleOneToOneCreation ()
 	{
-		var topic = nameof (SingleOneToOneCreation); 
+		const string topic = nameof (SingleOneToOneCreation); 
 		var tcs = new TaskCompletionSource<bool> ();
 		var worker = new FastWorker ("myWorkerID", tcs);
 		var workers = new [] { worker };
@@ -40,7 +40,6 @@ public class RegistrationTests {
 		var topic = nameof (SingleOneToOneRegistration);
 		var tcs = new TaskCompletionSource<bool> ();
 		var worker = new FastWorker ("myWorkerID", tcs);
-		var workers = new [] { worker };
 		TopicConfiguration configuration = new() { Mode = ChannelDeliveryMode.AtMostOnceAsync };
 		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration);
 		Assert.True (await _hub.RegisterAsync (topic, worker));
@@ -91,7 +90,9 @@ public class RegistrationTests {
 			// try to register from diff threads and ensure there are no unexpected issues
 			// this means that we DO NOT have two true values
 			// DO NOT AWAIT THE TASKS OR ELSE YOU WILL DEADLOCK
+#pragma warning disable CS4014
 			Task.Run (async () => {
+#pragma warning restore CS4014
 				// random sleep to ensure that the other thread is also trying to create
 				var sleep = random.Next (1000);
 				await Task.Delay (TimeSpan.FromMilliseconds (sleep));
