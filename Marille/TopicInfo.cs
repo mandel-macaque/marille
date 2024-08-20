@@ -3,6 +3,7 @@ using System.Threading.Channels;
 namespace Marille;
 
 internal record TopicInfo (TopicConfiguration Configuration){
+	public CancellationTokenSource? CancellationTokenSource { get; set;  }
 	public Task? ConsumerTask { get; set; }
 }
 
