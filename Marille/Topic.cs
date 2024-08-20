@@ -11,6 +11,10 @@ internal class Topic (string name) {
 	public IEnumerable<Task> ConsumerTasks => from info in channels.Values
 		where info.ConsumerTask is not null
 		select info.ConsumerTask;
+	
+	public IEnumerable<CancellationTokenSource> CancellationTokenSources => from info in channels.Values
+		where info.CancellationTokenSource is not null
+		select info.CancellationTokenSource;
 
 	public bool TryGetChannel<T> ([NotNullWhen (true)] out TopicInfo<T>? channel) where T : struct
 	{

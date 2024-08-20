@@ -7,12 +7,11 @@ namespace Marille;
 /// Main implementation of the IHub interface. This class is responsible for managing the topics and the workers.
 /// </summary>
 public class Hub : IHub {
-	readonly SemaphoreSlim semaphoreSlim = new(1);
+	readonly SemaphoreSlim semaphoreSlim = new (1);
 	readonly Dictionary<string, Topic> topics = new();
-	readonly Dictionary<(string Topic, Type Type), CancellationTokenSource> cancellationTokenSources = new();
 	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
 
-	public Hub () : this (new SemaphoreSlim (1))  { }
+	public Hub () : this (new (1))  { }
 	internal Hub (SemaphoreSlim semaphore)
 	{
 		semaphoreSlim = semaphore;
@@ -90,47 +89,44 @@ public class Hub : IHub {
 			}
 		}
 	}
-	
-	Task<bool> StartConsuming<T> (string topicName, TopicInfo<T> topicInfo)
+
+	async Task<bool> StartConsuming<T> (TopicInfo<T> topicInfo)
 		where T : struct
 	{
-		Type type = typeof (T);
 		// we want to be able to cancel the thread that we are using to consume the
 		// events for two different reasons:
 		// 1. We are done with the work
 		// 2. We want to add a new worker. Rather than risk a weird state
 		//    in which we are running a thread and try to modify a collection, 
 		//    we cancel the thread, use the channel as a buffer and do the changes
-		var cancellationToken = new CancellationTokenSource ();
+		if (topicInfo.CancellationTokenSource is not null)
+			await topicInfo.CancellationTokenSource.CancelAsync ();
+
+		// create a new source for the topic, we cannot use the one that we used to cancel the previous one
+		topicInfo.CancellationTokenSource = new ();
 		var workersCopy = topicInfo.Workers.ToArray (); 
 
 		// we have no interest in awaiting for this task, but we want to make sure it started. To do so
 		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
 		var completionSource = new TaskCompletionSource<bool>();
 		topicInfo.ConsumerTask = ConsumeChannel (
-			topicInfo.Configuration, topicInfo.Channel, workersCopy, completionSource, cancellationToken.Token);
-		cancellationTokenSources [(topicName, type)] = cancellationToken; 
+			topicInfo.Configuration, topicInfo.Channel, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
 		// send a message with a ack so that we can ensure we are indeed running
-		_ = topicInfo.Channel.Writer.WriteAsync (new (MessageType.Ack), cancellationToken.Token);
-		return completionSource.Task;
+		_ = topicInfo.Channel.Writer.WriteAsync (new (MessageType.Ack), topicInfo.CancellationTokenSource.Token);
+		return await completionSource.Task;
 	}
 
 	void StopConsuming<T> (string topicName) where T : struct
 	{
-		Type type = typeof (T);
-		if (!cancellationTokenSources.TryGetValue ((topicName, type), out var consumingInfo))
+		if (!topics.TryGetValue (topicName, out var topic))
 			return;
-
-		consumingInfo.Cancel ();
-		cancellationTokenSources.Remove ((topicName, type));
+		if (!topic.TryGetChannel<T> (out var topicInfo))
+			return;
+		topicInfo.CancellationTokenSource?.Cancel ();
 	}
 
 	async Task StopConsumingAsync <T> (string topicName) where T : struct
 	{
-		Type type = typeof (T);
-		if (!cancellationTokenSources.TryGetValue ((topicName, type), out _))
-			return;
-		
 		if (!TryGetChannel<T> (topicName, out var topic, out var topicInfo))
 			return;
 
@@ -143,7 +139,6 @@ public class Hub : IHub {
 
 		// clean behind us
 		topic.RemoveChannel<T> ();
-		cancellationTokenSources.Remove ((topicName, type));
 	}
 
 	bool TryGetChannel<T> (string topicName, [NotNullWhen(true)] out Topic? topic, [NotNullWhen(true)] out TopicInfo<T>? ch) where T : struct
@@ -180,7 +175,7 @@ public class Hub : IHub {
 			}
 
 			var topicInfo = topic.CreateChannel (configuration, initialWorkers);
-			await StartConsuming (topicName, topicInfo);
+			await StartConsuming (topicInfo);
 			return true;
 		} finally {
 			semaphoreSlim.Release ( );
@@ -219,7 +214,7 @@ public class Hub : IHub {
 			// but we do not need to close the channel, the API will buffer
 			StopConsuming<T> (topicName);
 			topicInfo.Workers.AddRange (newWorkers);
-			return await StartConsuming (topicName, topicInfo);
+			return await StartConsuming (topicInfo);
 		} finally {
 			semaphoreSlim.Release ();
 		}
@@ -255,9 +250,9 @@ public class Hub : IHub {
 				let tasks = topic.ConsumerTasks
 				from task in tasks select task;
 
-			// remove the need of a second loop by getting the cancellation tokens cancelled
-			var cancellationTasks = cancellationTokenSources.Values
-				.Select (x => x.CancelAsync ());
+			var cancellationTasks = from topic in topics.Values
+				let cancellationTokens = topic.CancellationTokenSources
+				from source in cancellationTokens select source.CancelAsync ();
 
 			// we could do a nested Task.WhenAll but we want to ensure that the cancellation tasks are done before
 			await Task.WhenAll (cancellationTasks);
