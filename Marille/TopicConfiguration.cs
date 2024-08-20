@@ -3,11 +3,11 @@ namespace Marille;
 /// <summary>
 /// Configuration class used to manage several settings for the channel creation.
 /// </summary>
-public struct TopicConfiguration {
+public struct TopicConfiguration () {
 	/// <summary>
 	/// The mode that will be used to dispatch messages among the different workers.
 	/// </summary>
-	public	ChannelDeliveryMode Mode { get; set; }
+	public	ChannelDeliveryMode Mode { get; set; } = ChannelDeliveryMode.AtLeastOnce;
 
 	/// <summary>
 	/// The capacity that the channel will have. When a channel is full, producers will be
@@ -22,10 +22,4 @@ public struct TopicConfiguration {
 	/// Default timeout for the workers that consume messages in the channel. 
 	/// </summary>
 	public TimeSpan? Timeout { get; set; } = null;
-
-	public TopicConfiguration ()
-	{
-		Mode = ChannelDeliveryMode.AtLeastOnce;
-	}
-
 }

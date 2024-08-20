@@ -126,7 +126,9 @@ public class CancellationTests {
 			// try to register from diff threads and ensure there are no unexpected issues
 			// this means that we DO NOT have two true values
 			// DO NOT AWAIT THE TASKS OR ELSE YOU WILL DEADLOCK
+#pragma warning disable CS4014 
 			Task.Run (async () => {
+#pragma warning restore CS4014
 				// random sleep to ensure that the other thread is also trying to create
 				var sleep = random.Next (1000);
 				await Task.Delay (TimeSpan.FromMilliseconds (sleep));

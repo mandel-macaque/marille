@@ -7,7 +7,7 @@ namespace Marille;
 /// Main implementation of the IHub interface. This class is responsible for managing the topics and the workers.
 /// </summary>
 public class Hub : IHub {
-	readonly SemaphoreSlim semaphoreSlim = new (1);
+	readonly SemaphoreSlim semaphoreSlim;
 	readonly Dictionary<string, Topic> topics = new();
 	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
 

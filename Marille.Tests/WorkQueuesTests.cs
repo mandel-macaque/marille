@@ -1,12 +1,10 @@
-using System.Threading.Channels;
-
 namespace Marille.Tests;
 
 // Set of tests that focus on the pattern in which a 
 // several consumers register to a queue and the compete
 // to consume an event.
 public class WorkQueuesTests {
-	Hub _hub;
+	readonly Hub _hub;
 	TopicConfiguration configuration;
 	readonly CancellationTokenSource cancellationTokenSource;
 
