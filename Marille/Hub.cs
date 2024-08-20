@@ -9,7 +9,7 @@ namespace Marille;
 public class Hub : IHub {
 	readonly SemaphoreSlim semaphoreSlim = new(1);
 	readonly Dictionary<string, Topic> topics = new();
-	readonly Dictionary<(string Topic, Type Type), (CancellationTokenSource CancellationToken, Task? ConsumeTask)> cancellationTokenSources = new();
+	readonly Dictionary<(string Topic, Type Type), CancellationTokenSource> cancellationTokenSources = new();
 	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
 
 	public Hub () : this (new SemaphoreSlim (1))  { }
@@ -107,9 +107,9 @@ public class Hub : IHub {
 		// we have no interest in awaiting for this task, but we want to make sure it started. To do so
 		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
 		var completionSource = new TaskCompletionSource<bool>();
-		var consumeTask = ConsumeChannel (
+		topicInfo.ConsumerTask = ConsumeChannel (
 			topicInfo.Configuration, topicInfo.Channel, workersCopy, completionSource, cancellationToken.Token);
-		cancellationTokenSources [(topicName, type)] = (cancellationToken, consumeTask); 
+		cancellationTokenSources [(topicName, type)] = cancellationToken; 
 		// send a message with a ack so that we can ensure we are indeed running
 		_ = topicInfo.Channel.Writer.WriteAsync (new (MessageType.Ack), cancellationToken.Token);
 		return completionSource.Task;
@@ -121,25 +121,25 @@ public class Hub : IHub {
 		if (!cancellationTokenSources.TryGetValue ((topicName, type), out var consumingInfo))
 			return;
 
-		consumingInfo.CancellationToken.Cancel ();
+		consumingInfo.Cancel ();
 		cancellationTokenSources.Remove ((topicName, type));
 	}
 
 	async Task StopConsumingAsync <T> (string topicName) where T : struct
 	{
 		Type type = typeof (T);
-		if (!cancellationTokenSources.TryGetValue ((topicName, type), out var consumingInfo))
+		if (!cancellationTokenSources.TryGetValue ((topicName, type), out _))
 			return;
 		
-		if (!TryGetChannel<T> (topicName, out var topic, out _))
+		if (!TryGetChannel<T> (topicName, out var topic, out var topicInfo))
 			return;
 
 		// complete the channels, this wont throw an cancellation exception, it will stop the channels from writing
 		// and the consuming task will finish when it is done with the current message, therefore we can
 		// use that to know when we are done
 		topic.CloseChannel<T> ();
-		if (consumingInfo.ConsumeTask is not null)
-			await consumingInfo.ConsumeTask;
+		if (topicInfo.ConsumerTask is not null)
+			await topicInfo.ConsumerTask;
 
 		// clean behind us
 		topic.RemoveChannel<T> ();
@@ -168,7 +168,6 @@ public class Hub : IHub {
 			return false;
 
 		// the topic might already have the channel, in that case, do nothing
-		Type type = typeof (T);
 		await semaphoreSlim.WaitAsync ();
 		try {
 			if (!topics.TryGetValue (topicName, out Topic? topic)) {
@@ -205,7 +204,6 @@ public class Hub : IHub {
 
 	public async Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
 	{
-		var type = typeof (T);
 		await semaphoreSlim.WaitAsync ();
 		try {
 			// we only allow the client to register to an existing topic
@@ -253,12 +251,13 @@ public class Hub : IHub {
 		// suppressing the warning is ugly when we do know how to help the compiler ;)
 		await semaphoreSlim.WaitAsync ();
 		try {
-			var consumingTasks = from consumeInfo in cancellationTokenSources.Values
-				where consumeInfo.ConsumeTask is not null
-				select consumeInfo.ConsumeTask;
+			var consumingTasks = from topic in topics.Values
+				let tasks = topic.ConsumerTasks
+				from task in tasks select task;
+
 			// remove the need of a second loop by getting the cancellation tokens cancelled
 			var cancellationTasks = cancellationTokenSources.Values
-				.Select (x => x.CancellationToken.CancelAsync ());
+				.Select (x => x.CancelAsync ());
 
 			// we could do a nested Task.WhenAll but we want to ensure that the cancellation tasks are done before
 			await Task.WhenAll (cancellationTasks);
