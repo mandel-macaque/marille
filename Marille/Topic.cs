@@ -4,9 +4,13 @@ using System.Threading.Channels;
 namespace Marille;
 
 internal class Topic (string name) {
-	readonly Dictionary<Type, object> channels = new();
+	readonly Dictionary<Type, TopicInfo> channels = new();
 
 	public string Name { get; } = name;
+
+	public IEnumerable<Task> ConsumerTasks => from info in channels.Values
+		where info.ConsumerTask is not null
+		select info.ConsumerTask;
 
 	public bool TryGetChannel<T> ([NotNullWhen (true)] out TopicInfo<T>? channel) where T : struct
 	{

@@ -2,7 +2,11 @@ using System.Threading.Channels;
 
 namespace Marille;
 
-internal record TopicInfo<T> (TopicConfiguration Configuration, Channel<Message<T>> Channel)
+internal record TopicInfo (TopicConfiguration Configuration){
+	public Task? ConsumerTask { get; set; }
+}
+
+internal record TopicInfo<T> (TopicConfiguration Configuration, Channel<Message<T>> Channel) : TopicInfo (Configuration)
 	where T : struct {
 	public List<IWorker<T>> Workers { get; } = new();
 
