@@ -2,9 +2,11 @@ using System.Threading.Channels;
 
 namespace Marille;
 
-internal record TopicInfo (TopicConfiguration Configuration){
+internal abstract record TopicInfo (TopicConfiguration Configuration){
 	public CancellationTokenSource? CancellationTokenSource { get; set;  }
 	public Task? ConsumerTask { get; set; }
+
+	public abstract void CloseChannel ();
 }
 
 internal record TopicInfo<T> (TopicConfiguration Configuration, Channel<Message<T>> Channel, IErrorWorker<T> ErrorWorker) : TopicInfo (Configuration)
@@ -16,5 +18,10 @@ internal record TopicInfo<T> (TopicConfiguration Configuration, Channel<Message<
 	{
 		ErrorWorker = errorWorker;
 		Workers.AddRange (workers);
+	}
+
+	public override void CloseChannel ()
+	{
+		Channel.Writer.Complete ();
 	}
 }

@@ -280,12 +280,14 @@ public class Hub : IHub {
 				let tasks = topic.ConsumerTasks
 				from task in tasks select task;
 
-			var cancellationTasks = from topic in topics.Values
-				let cancellationTokens = topic.CancellationTokenSources
-				from source in cancellationTokens select source.CancelAsync ();
+			var topicInfos = from topic in topics.Values
+				let channels = topic.Channels
+				from ch in channels select ch;
 
-			// we could do a nested Task.WhenAll but we want to ensure that the cancellation tasks are done before
-			await Task.WhenAll (cancellationTasks);
+			foreach (var topicInfo in topicInfos) {
+				topicInfo.CloseChannel ();
+			}
+
 			await Task.WhenAll (consumingTasks);
 		} finally {
 			semaphoreSlim.Release ();
