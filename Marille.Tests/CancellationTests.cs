@@ -95,7 +95,7 @@ public class CancellationTests {
 		var topic2 = "topic2";
 		var tcs2 = new TaskCompletionSource<bool> ();
 		var worker2 = new BlockingWorker(tcs2);
-		await _hub.CreateAsync<WorkQueuesEvent> (topic2, configuration);
+		await _hub.CreateAsync<WorkQueuesEvent> (topic2, _configuration, _errorWorker);
 		await _hub.RegisterAsync (topic2, worker2);
 		
 		tcs1.SetResult (true);
@@ -169,17 +169,17 @@ public class CancellationTests {
 		var eventCount = 100;
 		var list = new List<Task> (200);
 
-		configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		_configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
 		var topic1 = "topic1";
 		var tcs1 = new TaskCompletionSource<bool> ();
 		var worker1 = new BlockingWorker(tcs1);
-		await _hub.CreateAsync<WorkQueuesEvent> (topic1, configuration);
+		await _hub.CreateAsync<WorkQueuesEvent> (topic1, _configuration, _errorWorker);
 		await _hub.RegisterAsync (topic1, worker1);
 		
 		var topic2 = "topic2";
 		var tcs2 = new TaskCompletionSource<bool> ();
 		var worker2 = new BlockingWorker(tcs2);
-		await _hub.CreateAsync<WorkQueuesEvent> (topic2, configuration);
+		await _hub.CreateAsync<WorkQueuesEvent> (topic2, _configuration, _errorWorker);
 		await _hub.RegisterAsync (topic2, worker2);
 		
 		for (var index = 0; index < eventCount; index++) {
