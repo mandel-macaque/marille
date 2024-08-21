@@ -95,7 +95,7 @@ await _hub.CloseAsync<MyMessage> (topic1);
 
 5. Error handling
 
-The library provides a way to handle exceptions that are thrown by the workers. The error worker will be called
+The library provides a way to handle exceptions that are thrown by the workers. The error worker is called
 whenever an exception is thrown by a worker that is consuming a topic. It is up to the implementation to decide 
 if the message should be retried or not. 
 
