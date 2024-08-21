@@ -12,9 +12,7 @@ internal class Topic (string name) {
 		where info.ConsumerTask is not null
 		select info.ConsumerTask;
 	
-	public IEnumerable<CancellationTokenSource> CancellationTokenSources => from info in channels.Values
-		where info.CancellationTokenSource is not null
-		select info.CancellationTokenSource;
+	public IEnumerable<TopicInfo> Channels => channels.Values;
 
 	public bool TryGetChannel<T> ([NotNullWhen (true)] out TopicInfo<T>? channel) where T : struct
 	{
@@ -46,7 +44,7 @@ internal class Topic (string name) {
 		if (!TryGetChannel<T> (out var chInfo))
 			return;
 
-		chInfo.Channel.Writer.Complete ();
+		chInfo.CloseChannel ();
 		channels.Remove (typeof (T));
 	}
 
