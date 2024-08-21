@@ -5,17 +5,19 @@ namespace Marille.Tests;
 // to consume an event.
 public class WorkQueuesTests {
 	readonly Hub _hub;
-	TopicConfiguration configuration;
-	readonly CancellationTokenSource cancellationTokenSource;
+	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
+	TopicConfiguration _configuration;
+	readonly CancellationTokenSource _cancellationTokenSource;
 
 	public WorkQueuesTests ()
 	{
 		// use a simpler channel that we will use to receive the events when
 		// a worker has completed its work
 		_hub = new ();
-		configuration = new();
-		cancellationTokenSource = new();
-		cancellationTokenSource.CancelAfter (TimeSpan.FromSeconds (10));
+		_errorWorker = new();
+		_configuration = new();
+		_cancellationTokenSource = new();
+		_cancellationTokenSource.CancelAfter (TimeSpan.FromSeconds (10));
 	}
 
 	// The simplest API usage, we register to an event for a topic with our worker
@@ -25,14 +27,15 @@ public class WorkQueuesTests {
 	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
 	public async Task SingleWorker (ChannelDeliveryMode deliveryMode)
 	{
-		configuration.Mode = deliveryMode;
+		_configuration.Mode = deliveryMode;
 		var topic = "topic";
 		var tcs = new TaskCompletionSource<bool> ();
 		var worker = new FastWorker ("myWorkerID", tcs);
-		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration);
+		await _hub.CreateAsync (topic, _configuration, _errorWorker);
 		await _hub.RegisterAsync (topic, worker);
 		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));
 		Assert.True (await tcs.Task);
+		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
 
 	[Theory]
@@ -40,16 +43,17 @@ public class WorkQueuesTests {
 	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
 	public async Task SingleAction (ChannelDeliveryMode deliveryMode)
 	{
-		configuration.Mode = deliveryMode;
+		_configuration.Mode = deliveryMode;
 		var topic = "topic";
 		var tcs = new TaskCompletionSource<bool>();
 		Func<WorkQueuesEvent, CancellationToken, Task> action = (_, _) =>
 			Task.FromResult (tcs.TrySetResult(true));
 
-		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration);
+		await _hub.CreateAsync (topic, _configuration, _errorWorker);
 		Assert.True (await _hub.RegisterAsync (topic, action));
 		await _hub.Publish (topic, new WorkQueuesEvent("myID"));
 		Assert.True (await tcs.Task);
+		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
 
 	[Theory]
@@ -57,16 +61,16 @@ public class WorkQueuesTests {
 	[InlineData(ChannelDeliveryMode.AtMostOnceSync)]
 	public async Task SeveralWorkers (ChannelDeliveryMode deliveryMode)
 	{
-		configuration.Mode = deliveryMode;
+		_configuration.Mode = deliveryMode;
 		string workerID = "myWorkerID";
 
 		string topic1 = "topic1";
 		var tcsWorker1 = new TaskCompletionSource<bool> ();
-		await _hub.CreateAsync<WorkQueuesEvent> (topic1, configuration);
+		await _hub.CreateAsync (topic1, _configuration, _errorWorker);
 
 		string topic2 = "topic2";
 		var tcsWorker2 = new TaskCompletionSource<bool> ();
-		await _hub.CreateAsync<WorkQueuesEvent> (topic2, configuration);
+		await _hub.CreateAsync (topic2, _configuration, _errorWorker);
 		
 		// ensure that each of the workers will receive data for the topic it is interested
 		var worker1 = new FastWorker (workerID, tcsWorker1);
@@ -83,5 +87,6 @@ public class WorkQueuesTests {
 		// we should only get the event in topic one, the second topic should be ignored
 		Assert.True (await tcsWorker1.Task);
 		Assert.False (tcsWorker2.Task.IsCompleted);
+		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
 }

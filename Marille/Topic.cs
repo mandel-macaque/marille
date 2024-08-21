@@ -24,13 +24,15 @@ internal class Topic (string name) {
 		return channel is not null;
 	}
 
-	public TopicInfo<T> CreateChannel<T> (TopicConfiguration configuration, params IWorker<T>[] workers) where T : struct
+	public TopicInfo<T> CreateChannel<T> (TopicConfiguration configuration, IErrorWorker<T> errorWorker,
+		params IWorker<T>[] workers) where T : struct
 	{
 		Type type = typeof (T);
 		if (!TryGetChannel<T> (out var obj)) {
 			var ch = (configuration.Capacity is null) ? 
-				Channel.CreateUnbounded<Message<T>> () : Channel.CreateBounded<Message<T>> (configuration.Capacity.Value);
-			obj = new(configuration, ch, workers);
+				Channel.CreateUnbounded<Message<T>> () : 
+				Channel.CreateBounded<Message<T>> (configuration.Capacity.Value);
+			obj = new(configuration, ch, errorWorker, workers);
 			channels[type] = obj; 
 		}
 

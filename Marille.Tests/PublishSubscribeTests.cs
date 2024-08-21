@@ -1,16 +1,17 @@
 namespace Marille.Tests;
 
 public class PublishSubscribeTests {
-
-	Hub _hub;
-	readonly TopicConfiguration configuration;
+	readonly Hub _hub;
+	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
+	readonly TopicConfiguration _configuration;
 
 	public PublishSubscribeTests ()
 	{
 		// use a simpler channel that we will use to receive the events when
 		// a worker has completed its work
 		_hub = new ();
-		configuration = new();
+		_errorWorker = new();
+		_configuration = new();
 	}
 
 	[Theory]
@@ -29,7 +30,7 @@ public class PublishSubscribeTests {
 			workers.Add ((worker, tcs));
 		}
 		var topic = "topic";
-		await _hub.CreateAsync (topic, configuration, workers.Select (x => x.Worker));
+		await _hub.CreateAsync (topic, _configuration, _errorWorker, workers.Select (x => x.Worker));
 		// publish a single message that will be received by all workers meaning we should wait for ALL their
 		// task completion sources to be done
 		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));
@@ -40,6 +41,7 @@ public class PublishSubscribeTests {
 			// find a nicer way to match the worker with the bool
 			Assert.True (b);
 		}
+		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
 	
 	[Theory]
@@ -58,7 +60,7 @@ public class PublishSubscribeTests {
 			workers.Add ((worker, tcs));
 		}
 		var topic = "topic";
-		await _hub.CreateAsync<WorkQueuesEvent> (topic, configuration, workers.Select (x => x.Worker));
+		await _hub.CreateAsync (topic, _configuration, _errorWorker, workers.Select (x => x.Worker));
 		// publish a single message that will be received by all workers meaning we should wait for ALL their
 		// task completion sources to be done
 		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));

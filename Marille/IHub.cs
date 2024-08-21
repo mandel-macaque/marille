@@ -16,10 +16,11 @@ public interface IHub {
 	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
 	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
 	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="errorWorker">Worker that will receive any error from faulty worker executions.</param>
 	/// <param name="initialWorkers">Original set of IWorker&lt;T&gt; to be assigned the channel on creation.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
-	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, IErrorWorker<T> errorWorker,
 		params IWorker<T> [] initialWorkers) where T : struct;
 
 	/// <summary>
@@ -31,10 +32,11 @@ public interface IHub {
 	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
 	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
 	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="errorWorker">Worker that will receive any error from faulty worker executions.</param>
 	/// <param name="initialWorkers">Original set of IWorker&lt;T&gt; to be assigned the channel on creation.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
-	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, IErrorWorker<T> errorWorker,
 		IEnumerable<IWorker<T>> initialWorkers) where T : struct;
 
 	/// <summary>
@@ -44,10 +46,12 @@ public interface IHub {
 	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
 	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
 	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="errorAction">Worker that will receive any error from faulty worker executions.</param>
 	/// <param name="actions">A set of functions that will be executed when an item is delivered.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
-	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, 
+		Func<T, Exception, CancellationToken, Task> errorAction,
 		params Func<T, CancellationToken, Task> [] actions) where T : struct;
 
 	/// <summary>
@@ -57,12 +61,14 @@ public interface IHub {
 	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
 	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
 	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="errorAction">Worker that will receive any error from faulty worker executions.</param>
 	/// <param name="action">The function that will be executed when a message is delivered.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
-	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, 
+		Func<T, Exception, CancellationToken, Task> errorAction,
 		Func<T, CancellationToken, Task> action) where T : struct;
-	
+
 	/// <summary>
 	/// Attempts to create a new channel for the given topic name using the provided configuration. Channels cannot
 	/// be created more than once, in case the channel already exists this method returns false;
@@ -72,9 +78,26 @@ public interface IHub {
 	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
 	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
 	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="errorWorker">Worker that will receive any error from faulty worker executions.</param>
 	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
 	/// <returns>true when the channel was created.</returns>
-	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration) where T : struct;
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+		IErrorWorker<T> errorWorker) where T : struct;
+
+	/// <summary>
+	/// Attempts to create a new channel for the given topic name using the provided configuration. Channels cannot
+	/// be created more than once, in case the channel already exists this method returns false;
+	///
+	/// No workers will be assigned to the channel upon creation.
+	/// </summary>
+	/// <param name="topicName">The topic used to identify the channel. The same topic can have channels for different
+	/// types of events, but the combination (topicName, eventType) has to be unique.</param>
+	/// <param name="configuration">The configuration to use for the channel creation.</param>
+	/// <param name="errorAction">Worker that will receive any error from faulty worker executions.</param>
+	/// <typeparam name="T">The event type to be used for the channel.</typeparam>
+	/// <returns>true when the channel was created.</returns>
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+		Func<T, Exception, CancellationToken, Task> errorAction) where T : struct;
 
 	/// <summary>
 	/// Attempts to register new workers to consume messages for the given topic.

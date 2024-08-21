@@ -18,7 +18,7 @@
     <PropertyGroup>
         <Title>Marille</Title>
         <PackageId>Marille</PackageId>
-        <Version>0.4.3</Version>
+        <Version>0.5.0</Version>
         <Authors>Manuel de la Peña Saenz</Authors>
         <Owners>Manuel de la Peña Saenz</Owners>
         <Copyright>Manuel de la Peña Saenz</Copyright>

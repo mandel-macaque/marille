@@ -17,9 +17,16 @@ public class Hub : IHub {
 		semaphoreSlim = semaphore;
 	} 
 	
-	void DeliverAtLeastOnce<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item, TimeSpan? timeout)
+	void DeliverAtLeastOnce<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item, 
+		IErrorWorker<T> errorWorker, TimeSpan? timeout)
 		where T : struct
 	{
+		// if we are dealing with an error, only the error worker will be used
+		if (item.IsError) {
+			_ = errorWorker.ConsumeAsync (item.Payload, item.Exception);
+			return;
+		}
+
 		Parallel.ForEach (workersArray, worker => {
 			CancellationToken token = default;
 			if (timeout.HasValue) {
@@ -27,14 +34,20 @@ public class Hub : IHub {
 				cts.CancelAfter (timeout.Value);
 				token = cts.Token;
 			}
-			_ = worker.ConsumeAsync (item.Payload, token)
-				.ContinueWith ((t) => { channel.Writer.WriteAsync (item); }, TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
-				.ContinueWith ((t) => WorkersExceptions.Writer.WriteAsync (new(typeof(T), worker, t.Exception)), 
-					TaskContinuationOptions.OnlyOnFaulted);
+			var task = worker.ConsumeAsync (item.Payload, token);
+			// retry on cancel
+			task.ContinueWith (async (t) => { await channel.Writer.WriteAsync (item); },
+				TaskContinuationOptions.OnlyOnCanceled);  // TODO: max retries
+			// pump an error message back to the channel that will be dealt by the error worker
+			task.ContinueWith (async (t) => {
+				var error = new Message<T> (item.Payload, t.Exception!);
+				await channel.Writer.WriteAsync (error);
+			}, TaskContinuationOptions.OnlyOnFaulted);
 		});
 	}
 
-	Task<ValueTask> DeliverAtMostOnce<T> (Channel<Message<T>> ch, IWorker<T> [] workersArray, Message<T> item, TimeSpan? timeout)
+	Task DeliverAtMostOnce<T> (Channel<Message<T>> ch, IWorker<T> [] workersArray, Message<T> item,
+		IErrorWorker<T>  errorWorker, TimeSpan? timeout)
 		where T : struct
 	{
 		// we do know we are not empty, and in the AtMostOnce mode we will only use the first worker
@@ -47,18 +60,28 @@ public class Hub : IHub {
 			token = cts.Token;
 		}
 
-		var task = worker.ConsumeAsync (item.Payload, token)
-			.ContinueWith ((t) => { ch.Writer.WriteAsync (item); },
-				TaskContinuationOptions.OnlyOnCanceled) // TODO: max retries
-			.ContinueWith (
-				(t) => WorkersExceptions.Writer.WriteAsync (new(typeof (T), worker,
-					t.Exception)),
-				TaskContinuationOptions.OnlyOnFaulted);
+		// do not chain continuations, what we want to do is have a continuation when there is an exception
+		// and a continuation when the task is canceled. Both use async so adding more continuation should need
+		// to be done with care by calling Unwrap
+		var task = (item.IsError) 
+			? errorWorker.ConsumeAsync (item.Payload, item.Exception, token) :
+			  worker.ConsumeAsync (item.Payload, token);
+
+		// retry on cancel
+		task.ContinueWith (async _ => { await ch.Writer.WriteAsync (item); },
+			TaskContinuationOptions.OnlyOnCanceled); // TODO: max retries
+
+		// pump an error message back to the channel that will be dealt by the error worker
+		task.ContinueWith (async (t) => {
+			// build a new message of the error type and send it back to the channel
+			var error = new Message<T> (item.Payload, t.Exception!);
+			await ch.Writer.WriteAsync (error);
+		}, TaskContinuationOptions.OnlyOnFaulted);
 		return task;
 	}
 
-	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IWorker<T>[] workersArray, 
-		TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken) where T : struct
+	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
+		IWorker<T>[] workersArray, TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken) where T : struct
 	{
 		// this is an important check, else the items will be consumer with no worker to receive them
 		if (workersArray.Length == 0) {
@@ -76,14 +99,14 @@ public class Hub : IHub {
 					continue;
 				switch (configuration.Mode) {
 				case ChannelDeliveryMode.AtLeastOnce:
-					DeliverAtLeastOnce (ch, workersArray, item, configuration.Timeout);
+					DeliverAtLeastOnce (ch, workersArray, item, errorWorker, configuration.Timeout);
 					break;
 				case ChannelDeliveryMode.AtMostOnceAsync:
-					_ = DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout);
+					_ = DeliverAtMostOnce (ch, workersArray, item, errorWorker, configuration.Timeout);
 					break;
 				case ChannelDeliveryMode.AtMostOnceSync:
 					// make the call 'sync' by not processing an item until we are done with the current one
-					await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout);
+					await DeliverAtMostOnce (ch, workersArray, item, errorWorker, configuration.Timeout);
 					break;
 				}
 			}
@@ -110,7 +133,7 @@ public class Hub : IHub {
 		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
 		var completionSource = new TaskCompletionSource<bool>();
 		topicInfo.ConsumerTask = ConsumeChannel (
-			topicInfo.Configuration, topicInfo.Channel, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
+			topicInfo.Configuration, topicInfo.Channel, topicInfo.ErrorWorker, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
 		// send a message with a ack so that we can ensure we are indeed running
 		_ = topicInfo.Channel.Writer.WriteAsync (new (MessageType.Ack), topicInfo.CancellationTokenSource.Token);
 		return await completionSource.Task;
@@ -157,7 +180,7 @@ public class Hub : IHub {
 	}
 
 	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
-		params IWorker<T>[] initialWorkers) where T : struct
+		IErrorWorker<T> errorWorker, params IWorker<T>[] initialWorkers) where T : struct
 	{
 		if (configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && initialWorkers.Length > 1)
 			return false;
@@ -174,7 +197,7 @@ public class Hub : IHub {
 				return false;
 			}
 
-			var topicInfo = topic.CreateChannel (configuration, initialWorkers);
+			var topicInfo = topic.CreateChannel (configuration, errorWorker, initialWorkers);
 			await StartConsuming (topicInfo);
 			return true;
 		} finally {
@@ -182,20 +205,27 @@ public class Hub : IHub {
 		}
 	}
 
-	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, IErrorWorker<T> errorWorker,
 		IEnumerable<IWorker<T>> initialWorkers) where T : struct
-		=> CreateAsync (topicName, configuration, initialWorkers.ToArray ());
+		=> CreateAsync (topicName, configuration, errorWorker, initialWorkers.ToArray ());
 
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
-		params Func<T, CancellationToken, Task> [] actions) where T : struct
-		=> CreateAsync (topicName, configuration, actions.Select (a => new LambdaWorker<T> (a)));
+		Func<T, Exception, CancellationToken, Task> errorAction, params Func<T, CancellationToken, Task> [] actions) where T : struct
+		=> CreateAsync (topicName, configuration, new LambdaErrorWorker<T> (errorAction), 
+			actions.Select (a => new LambdaWorker<T> (a)));
 
-	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration) where T : struct
-		=> CreateAsync (topicName, configuration, Array.Empty<IWorker<T>> ());
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, IErrorWorker<T> errorWorker) where T : struct
+		=> CreateAsync (topicName, configuration, errorWorker, Array.Empty<IWorker<T>> ());
+
+	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+		Func<T, Exception, CancellationToken, Task> errorAction) where T : struct
+		=> CreateAsync (topicName, configuration, new LambdaErrorWorker<T> (errorAction));
 	
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
+		Func<T, Exception, CancellationToken, Task> errorAction,
 		Func<T, CancellationToken, Task> action) where T : struct
-		=> CreateAsync (topicName, configuration, new LambdaWorker<T> (action));
+		=> CreateAsync (topicName, configuration, new LambdaErrorWorker<T> (errorAction),
+			new LambdaWorker<T> (action));
 
 	public async Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
 	{

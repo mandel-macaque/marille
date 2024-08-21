@@ -38,6 +38,12 @@ class MyWorker : IWorker<MyMessage> {
        => Task.FromResult (Completion.TrySetResult(true));
 }
 
+// creeate an error worker to handle exceptions from workers
+class ErrorWorker : IErrorWorker<MyMessage> {
+    public Task ConsumeAsync (MyMessage message, Exception exception, CancellationToken cancellationToken = default)
+        => Task.FromResult (Completion.TrySetResult(true));
+}
+
 ```
 
 2. Setup the topic via a new Hub:
@@ -52,9 +58,10 @@ public Task CreateChannels () {
     var configuration = new() { Mode = ChannelDeliveryMode.AtMostOnce };
     var topic = "topic";
     var worker = new MyWorker ();
+    var errorWorker = new ErrorWorker ();
     // workers can be either added during the channel creation or after the fact
     // with the TryRegister method.
-    return _hub.CreateAsync (topic, configuration, worker);
+    return _hub.CreateAsync (topic, configuration, errorWorer, worker);
 }
 ```
 
@@ -85,3 +92,14 @@ await _hub.CloseAsync<MyMessage> (topic);
 // close all topcis
 await _hub.CloseAsync<MyMessage> (topic1);
 ```
+
+5. Error handling
+
+The library provides a way to handle exceptions that are thrown by the workers. The error worker is called
+whenever an exception is thrown by a worker that is consuming a topic. It is up to the implementation to decide 
+if the message should be retried or not. 
+
+If we do not want to retry a message a worker can throw and exception, such exception will be added to a queue that 
+will be consumed by the error worker that was used when the topic was created. Each topic has its own error queue, that
+means that the error worker will only consume errors from the topic that it was created for.
+
