@@ -9,6 +9,7 @@ public class RegistrationTests {
 	{
 		_semaphoreSlim = new(1);
 		_hub = new (_semaphoreSlim);
+		_errorWorker = new();
 	} 
 
 	[Fact]
