@@ -182,8 +182,8 @@ public class CancellationTests {
 		}
 		
 		// we are blocking the consume of the channels
-		tcs1.SetResult (true);
-		tcs2.SetResult (true);
+		Assert.True(tcs1.TrySetResult(true));
+		Assert.True(tcs2.TrySetResult(true));
 
 		// close the hub, should throw no cancellation token exceptions and events should have been processed
 		await _hub.CloseAllAsync ();
