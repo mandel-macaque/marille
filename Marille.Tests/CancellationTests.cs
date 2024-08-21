@@ -16,7 +16,7 @@ public class CancellationTests {
 	[Fact]
 	public async Task CloseSingleWorkerNoEvents ()
 	{
-		_configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
 		var topic = "topic";
 		var tcs = new TaskCompletionSource<bool> ();
 		var worker = new BlockingWorker(tcs);
@@ -33,7 +33,7 @@ public class CancellationTests {
 	public async Task CloseSingleWorkerFlushedEvents ()
 	{
 		var eventCount = 100;
-		_configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
 		var topic = "topic";
 		var tcs = new TaskCompletionSource<bool> ();
 		var worker = new BlockingWorker(tcs);
@@ -54,7 +54,7 @@ public class CancellationTests {
 	public async Task CloseAllWorkersFlushedEvents ()
 	{
 		var eventCount = 100;
-		_configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
 		var topic1 = "topic1";
 		var tcs1 = new TaskCompletionSource<bool> ();
 		var worker1 = new BlockingWorker(tcs1);
@@ -85,7 +85,7 @@ public class CancellationTests {
 	[Fact]
 	public async Task CloseAllWorkersNoEvents ()
 	{
-		_configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
 		var topic1 = "topic1";
 		var tcs1 = new TaskCompletionSource<bool> ();
 		var worker1 = new BlockingWorker(tcs1);
@@ -118,7 +118,7 @@ public class CancellationTests {
 		
 		// create the topic and then try to close if from several threads ensuring that only one of them
 		// closes the channel.
-		_configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
 		var topic = nameof (MultithreadedClose);
 		await _hub.CreateAsync (topic, _configuration, _errorWorker);
 		
@@ -169,7 +169,7 @@ public class CancellationTests {
 		var eventCount = 100;
 		var list = new List<Task> (200);
 
-		_configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
 		var topic1 = "topic1";
 		var tcs1 = new TaskCompletionSource<bool> ();
 		var worker1 = new BlockingWorker(tcs1);

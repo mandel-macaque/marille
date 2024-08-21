@@ -9,24 +9,32 @@ namespace Marille;
 public class Hub : IHub {
 	readonly SemaphoreSlim semaphoreSlim;
 	readonly Dictionary<string, Topic> topics = new();
-	public Channel<WorkerError> WorkersExceptions { get; } = Channel.CreateUnbounded<WorkerError> ();
 
 	public Hub () : this (new (1))  { }
 	internal Hub (SemaphoreSlim semaphore)
 	{
 		semaphoreSlim = semaphore;
-	} 
-	
-	void DeliverAtLeastOnce<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item, 
-		IErrorWorker<T> errorWorker, TimeSpan? timeout)
+	}
+
+	async Task HandleConsumerError<T> (Task task, Channel<Message<T>> channel, Message<T> item)
 		where T : struct
 	{
-		// if we are dealing with an error, only the error worker will be used
-		if (item.IsError) {
-			_ = errorWorker.ConsumeAsync (item.Payload, item.Exception);
-			return;
+		try {
+			await task;
+		} catch (OperationCanceledException) {
+			// retry on cancel
+			await channel.Writer.WriteAsync (item);
+		} catch (Exception e) {
+			// pump an error message back to the channel that will be dealt by the error worker
+			var error = new Message<T> (item.Payload, e);
+			await channel.Writer.WriteAsync (error);
 		}
+	}
 
+	void DeliverAtLeastOnceAsync<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item, 
+		TimeSpan? timeout)
+		where T : struct
+	{
 		Parallel.ForEach (workersArray, worker => {
 			CancellationToken token = default;
 			if (timeout.HasValue) {
@@ -36,7 +44,7 @@ public class Hub : IHub {
 			}
 			var task = worker.ConsumeAsync (item.Payload, token);
 			// retry on cancel
-			task.ContinueWith (async (t) => { await channel.Writer.WriteAsync (item); },
+			task.ContinueWith (async _ => { await channel.Writer.WriteAsync (item); },
 				TaskContinuationOptions.OnlyOnCanceled);  // TODO: max retries
 			// pump an error message back to the channel that will be dealt by the error worker
 			task.ContinueWith (async (t) => {
@@ -46,8 +54,29 @@ public class Hub : IHub {
 		});
 	}
 
-	Task DeliverAtMostOnce<T> (Channel<Message<T>> ch, IWorker<T> [] workersArray, Message<T> item,
-		IErrorWorker<T>  errorWorker, TimeSpan? timeout)
+	Task DeliverAtLeastOnceSync<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item,
+		TimeSpan? timeout)
+		where T : struct
+	{
+		// we just need to execute all the provider workers with the same message and return the
+		// task when all are done
+		CancellationToken token = default;
+		if (timeout.HasValue) {
+			var cts = new CancellationTokenSource ();
+			cts.CancelAfter (timeout.Value);
+			token = cts.Token;
+		}
+
+		var tasks = new Task [workersArray.Length];
+		for(var index = 0; index < workersArray.Length; index++) {
+			var worker = workersArray [index];
+			tasks [index] = worker.ConsumeAsync (item.Payload, token);
+		}
+		return HandleConsumerError (Task.WhenAll (tasks), channel, item);
+	}
+
+	Task DeliverAtMostOnce<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item,
+		TimeSpan? timeout)
 		where T : struct
 	{
 		// we do know we are not empty, and in the AtMostOnce mode we will only use the first worker
@@ -60,24 +89,7 @@ public class Hub : IHub {
 			token = cts.Token;
 		}
 
-		// do not chain continuations, what we want to do is have a continuation when there is an exception
-		// and a continuation when the task is canceled. Both use async so adding more continuation should need
-		// to be done with care by calling Unwrap
-		var task = (item.IsError) 
-			? errorWorker.ConsumeAsync (item.Payload, item.Exception, token) :
-			  worker.ConsumeAsync (item.Payload, token);
-
-		// retry on cancel
-		task.ContinueWith (async _ => { await ch.Writer.WriteAsync (item); },
-			TaskContinuationOptions.OnlyOnCanceled); // TODO: max retries
-
-		// pump an error message back to the channel that will be dealt by the error worker
-		task.ContinueWith (async (t) => {
-			// build a new message of the error type and send it back to the channel
-			var error = new Message<T> (item.Payload, t.Exception!);
-			await ch.Writer.WriteAsync (error);
-		}, TaskContinuationOptions.OnlyOnFaulted);
-		return task;
+		return HandleConsumerError ( worker.ConsumeAsync (item.Payload, token), channel, item);
 	}
 
 	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
@@ -97,16 +109,25 @@ public class Hub : IHub {
 				// filter the ack message since it is only used to make sure that the task is indeed consuming
 				if (item.Type == MessageType.Ack) 
 					continue;
+				if (item.IsError) {
+					// do wait for the error worker to finish, we do not want to lose any error
+					await errorWorker.ConsumeAsync (item.Payload, item.Exception, cancellationToken);
+					continue;
+				}
 				switch (configuration.Mode) {
-				case ChannelDeliveryMode.AtLeastOnce:
-					DeliverAtLeastOnce (ch, workersArray, item, errorWorker, configuration.Timeout);
+				case ChannelDeliveryMode.AtLeastOnceAsync:
+					DeliverAtLeastOnceAsync (ch, workersArray, item, configuration.Timeout);
+					break;
+				case ChannelDeliveryMode.AtLeastOnceSync:
+					// make the call 'sync' by not processing an item until we are done with the current one
+					await DeliverAtLeastOnceSync (ch, workersArray, item, configuration.Timeout);
 					break;
 				case ChannelDeliveryMode.AtMostOnceAsync:
-					_ = DeliverAtMostOnce (ch, workersArray, item, errorWorker, configuration.Timeout);
+					_ = DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout);
 					break;
 				case ChannelDeliveryMode.AtMostOnceSync:
 					// make the call 'sync' by not processing an item until we are done with the current one
-					await DeliverAtMostOnce (ch, workersArray, item, errorWorker, configuration.Timeout);
+					await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout);
 					break;
 				}
 			}

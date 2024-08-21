@@ -59,7 +59,8 @@ public class PublishSubscribeTests {
 			var worker = new SleepyWorker($"worker{index + 1}", tcs);
 			workers.Add ((worker, tcs));
 		}
-		var topic = "topic";
+
+		var topic = nameof (SingleProducerSeveralSleepyConsumers);
 		await _hub.CreateAsync (topic, _configuration, _errorWorker, workers.Select (x => x.Worker));
 		// publish a single message that will be received by all workers meaning we should wait for ALL their
 		// task completion sources to be done

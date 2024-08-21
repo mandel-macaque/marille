@@ -7,7 +7,7 @@ public struct TopicConfiguration () {
 	/// <summary>
 	/// The mode that will be used to dispatch messages among the different workers.
 	/// </summary>
-	public	ChannelDeliveryMode Mode { get; set; } = ChannelDeliveryMode.AtLeastOnce;
+	public ChannelDeliveryMode Mode { get; set; } = ChannelDeliveryMode.AtLeastOnceAsync;
 
 	/// <summary>
 	/// The capacity that the channel will have. When a channel is full, producers will be
