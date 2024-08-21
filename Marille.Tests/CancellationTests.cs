@@ -90,7 +90,7 @@ public class CancellationTests {
 		
 		var topic2 = "topic2";
 		var tcs2 = new TaskCompletionSource<bool> ();
-		var worker2 = new BlockingWorker(tcs1);
+		var worker2 = new BlockingWorker(tcs2);
 		await _hub.CreateAsync<WorkQueuesEvent> (topic2, configuration);
 		await _hub.RegisterAsync (topic2, worker2);
 		
@@ -153,5 +153,41 @@ public class CancellationTests {
 			}
 		}
 		Assert.False (finalResult);
+	}
+
+	[Fact]
+	public async Task CloseAllChannelsAsync ()
+	{
+		// build several channels and then close them all, this should ensure that all the workers
+		// have consume all the messages
+		var eventCount = 100;
+		var list = new List<Task> (200);
+
+		configuration.Mode = ChannelDeliveryMode.AtLeastOnce;
+		var topic1 = "topic1";
+		var tcs1 = new TaskCompletionSource<bool> ();
+		var worker1 = new BlockingWorker(tcs1);
+		await _hub.CreateAsync<WorkQueuesEvent> (topic1, configuration);
+		await _hub.RegisterAsync (topic1, worker1);
+		
+		var topic2 = "topic2";
+		var tcs2 = new TaskCompletionSource<bool> ();
+		var worker2 = new BlockingWorker(tcs2);
+		await _hub.CreateAsync<WorkQueuesEvent> (topic2, configuration);
+		await _hub.RegisterAsync (topic2, worker2);
+		
+		for (var index = 0; index < eventCount; index++) {
+			await _hub.Publish (topic1, new WorkQueuesEvent($"myID{index}"));
+			await _hub.Publish (topic2, new WorkQueuesEvent($"myID{index}"));
+		}
+		
+		// we are blocking the consume of the channels
+		Assert.True(tcs1.TrySetResult(true));
+		Assert.True(tcs2.TrySetResult(true));
+
+		// close the hub, should throw no cancellation token exceptions and events should have been processed
+		await _hub.CloseAllAsync ();
+		Assert.Equal (100, worker1.ConsumedCount);
+		Assert.Equal (100, worker2.ConsumedCount);
 	}
 }
