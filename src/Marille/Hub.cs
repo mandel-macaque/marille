@@ -169,18 +169,8 @@ public class Hub : IHub {
 		topicInfo.CancellationTokenSource?.Cancel ();
 	}
 
-	async Task StopConsumingAsync <T> (string topicName) where T : struct
-	{
-		if (!TryGetChannel<T> (topicName, out var topic, out var topicInfo))
-			return;
-
-		// complete the channels, this wont throw an cancellation exception, it will stop the channels from writing
-		// and the consuming task will finish when it is done with the current message, therefore we can
-		// use that to know when we are done
-		await topic.CloseChannel<T> ();
-	}
-
-	bool TryGetChannel<T> (string topicName, [NotNullWhen(true)] out Topic? topic, [NotNullWhen(true)] out TopicInfo<T>? ch) where T : struct
+	bool TryGetChannel<T> (string topicName, [NotNullWhen(true)] out Topic? topic, 
+		[NotNullWhen(true)] out TopicInfo<T>? ch) where T : struct
 	{
 		topic = null;
 		ch = null;
@@ -296,14 +286,13 @@ public class Hub : IHub {
 				let tasks = topic.ConsumerTasks
 				from task in tasks select task;
 
-			var topicInfos = from topic in topics.Values
-				let channels = topic.Channels
-				from ch in channels select ch;
-
-			foreach (var topicInfo in topicInfos) {
-				await topicInfo.CloseChannel ();
+			// dispose all the topics, that will dispose all the channels and tasks should complete
+			foreach (var info in topics.Values) {
+				await info.DisposeAsync ();
 			}
+			topics.Clear ();
 
+			// the DisposeAsync should be closing the channels, but we will wait for the tasks to finish anyway
 			await Task.WhenAll (consumingTasks);
 		} finally {
 			semaphoreSlim.Release ();
@@ -315,9 +304,15 @@ public class Hub : IHub {
 		await semaphoreSlim.WaitAsync ();
 		try {
 			// ensure that the channels does exist, if not, return false
-			if (!TryGetChannel<T> (topicName, out _, out _))
+			if (!TryGetChannel<T> (topicName, out var topic, out _))
 				return false;
-			await StopConsumingAsync<T> (topicName);
+
+			// remove the channel, removing will call dispose
+			await topic.RemoveChannel<T> ();
+			// clean the topic if needed
+			if (topic.ChannelCount == 0) {
+				topics.Remove (topicName);
+			}
 			return true;
 		} finally {
 			semaphoreSlim.Release ();
