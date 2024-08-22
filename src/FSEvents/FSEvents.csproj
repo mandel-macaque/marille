@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net8.0-macos</TargetFramework>
+		<OutputType>Exe</OutputType>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<ImplicitUsings>true</ImplicitUsings>
+		<SupportedOSPlatformVersion>13.0</SupportedOSPlatformVersion>
+		<RootNamespace>FSEvents</RootNamespace>
+		<AssemblyName>fsevents</AssemblyName>
+		<RuntimeIdentifiers>osx-x64;osx-arm64</RuntimeIdentifiers>
+		<LinkMode>Full</LinkMode>
+		<AssemblyCompany>themacaque.com</AssemblyCompany>
+		<AssemblyCopyright>Manuel de la Peña Saenz</AssemblyCopyright>
+		<DebugSymbols>true</DebugSymbols>
+		<DebugType>full</DebugType>
+		<Nullable>enable</Nullable>
+		<ApplicationId>com.marille.FSEvents</ApplicationId>
+	</PropertyGroup>
+	
+	<ItemGroup>
+	  <ProjectReference Include="..\Marille\Marille.csproj" />
+	</ItemGroup>
+</Project>
