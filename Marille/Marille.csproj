@@ -23,6 +23,7 @@
         <Owners>Manuel de la Peña Saenz</Owners>
         <Copyright>Manuel de la Peña Saenz</Copyright>
         <Company>themacaque.com</Company>
+        <PackageIcon>icon.png</PackageIcon>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageProjectUrl>https://github.com/mandel-macaque/marille</PackageProjectUrl>
         <RepositoryUrl>https://github.com/mandel-macaque/marille</RepositoryUrl>
@@ -40,6 +41,7 @@
 
     <ItemGroup>
         <None Include="../README.md" Pack="true" PackagePath="/" />
+        <None Include="../icon.png" Pack="true" PackagePath="/"/>
     </ItemGroup>
 
     <ItemGroup>
