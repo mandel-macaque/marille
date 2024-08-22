@@ -27,12 +27,15 @@ jobs:
 
     - name: Restore dependencies
       run: dotnet restore
+      working-directory: ./src
 
     - name: Build
       run: dotnet build --no-restore
+      working-directory: ./src
 
     - name: Test
-      run: dotnet test --no-build --verbosity normal --logger trx --results-directory "TestResults"
+      run: dotnet test --no-build --verbosity normal --logger trx --results-directory "../TestResults"
+      working-directory: ./src
 
     - name: Upload dotnet test results
       uses: actions/upload-artifact@v4

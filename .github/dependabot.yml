@@ -6,10 +6,10 @@
 version: 2
 updates:
   - package-ecosystem: "nuget"
-    directory: "/"
+    directory: "/src"
     schedule:
       interval: "weekly"
-      
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

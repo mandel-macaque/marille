@@ -34,9 +34,11 @@ jobs:
 
       - name: Build project
         run: dotnet build -c Release /p:Version=$VERSION
+        working-directory: ./src
 
       - name: Create the package
         run: dotnet pack -c Release -o ${{ env.NuGetDirectory }} /p:PackageVersion=$VERSION
+        working-directory: ./src
 
       - name: Upload Package for Publishing
         uses: actions/upload-artifact@v4
