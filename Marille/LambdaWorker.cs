@@ -6,4 +6,8 @@ internal class LambdaWorker<T> (Func<T, CancellationToken,Task> lambda) : IWorke
 		// await the lambda function so that we can wrap any exceptions in a Task
 		await lambda (message, cancellationToken);
 	}
+
+	public void Dispose () { }
+
+	public ValueTask DisposeAsync () => ValueTask.CompletedTask;
 }

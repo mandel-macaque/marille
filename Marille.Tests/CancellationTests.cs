@@ -1,6 +1,6 @@
 namespace Marille.Tests;
 
-public class CancellationTests {
+public class CancellationTests : IDisposable {
 	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
 	readonly Hub _hub;
 	readonly SemaphoreSlim _semaphoreSlim;
@@ -13,11 +13,19 @@ public class CancellationTests {
 		_hub = new (_semaphoreSlim);
 		_configuration = new();
 	}
+	
+	public void Dispose ()
+	{
+		_errorWorker.Dispose ();
+		_hub.Dispose ();
+		_semaphoreSlim.Dispose ();
+	}
+
 	[Fact]
 	public async Task CloseSingleWorkerNoEvents ()
 	{
 		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
-		var topic = "topic";
+		var topic = nameof (CloseSingleWorkerNoEvents);
 		var tcs = new TaskCompletionSource<bool> ();
 		var worker = new BlockingWorker(tcs);
 		await _hub.CreateAsync (topic, _configuration, _errorWorker);
@@ -34,7 +42,7 @@ public class CancellationTests {
 	{
 		var eventCount = 100;
 		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
-		var topic = "topic";
+		var topic = nameof (CloseSingleWorkerFlushedEvents);
 		var tcs = new TaskCompletionSource<bool> ();
 		var worker = new BlockingWorker(tcs);
 		await _hub.CreateAsync (topic, _configuration, _errorWorker);
@@ -55,13 +63,13 @@ public class CancellationTests {
 	{
 		var eventCount = 100;
 		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
-		var topic1 = "topic1";
+		var topic1 = nameof (CloseAllWorkersFlushedEvents);
 		var tcs1 = new TaskCompletionSource<bool> ();
 		var worker1 = new BlockingWorker(tcs1);
 		await _hub.CreateAsync (topic1, _configuration, _errorWorker);
 		await _hub.RegisterAsync (topic1, worker1);
-		
-		var topic2 = "topic2";
+
+		var topic2 = $"{topic1}2";
 		var tcs2 = new TaskCompletionSource<bool> ();
 		var worker2 = new BlockingWorker(tcs1);
 		await _hub.CreateAsync (topic2, _configuration, _errorWorker);
@@ -86,13 +94,13 @@ public class CancellationTests {
 	public async Task CloseAllWorkersNoEvents ()
 	{
 		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
-		var topic1 = "topic1";
+		var topic1 = nameof (CloseAllWorkersNoEvents);
 		var tcs1 = new TaskCompletionSource<bool> ();
 		var worker1 = new BlockingWorker(tcs1);
 		await _hub.CreateAsync (topic1, _configuration, _errorWorker);
 		await _hub.RegisterAsync (topic1, worker1);
 		
-		var topic2 = "topic2";
+		var topic2 = $"{topic1}2";
 		var tcs2 = new TaskCompletionSource<bool> ();
 		var worker2 = new BlockingWorker(tcs2);
 		await _hub.CreateAsync<WorkQueuesEvent> (topic2, _configuration, _errorWorker);
@@ -170,13 +178,13 @@ public class CancellationTests {
 		var list = new List<Task> (200);
 
 		_configuration.Mode = ChannelDeliveryMode.AtLeastOnceAsync;
-		var topic1 = "topic1";
+		var topic1 = nameof (CloseAllChannelsAsync);
 		var tcs1 = new TaskCompletionSource<bool> ();
 		var worker1 = new BlockingWorker(tcs1);
 		await _hub.CreateAsync<WorkQueuesEvent> (topic1, _configuration, _errorWorker);
 		await _hub.RegisterAsync (topic1, worker1);
 		
-		var topic2 = "topic2";
+		var topic2 = $"{topic1}2";
 		var tcs2 = new TaskCompletionSource<bool> ();
 		var worker2 = new BlockingWorker(tcs2);
 		await _hub.CreateAsync<WorkQueuesEvent> (topic2, _configuration, _errorWorker);

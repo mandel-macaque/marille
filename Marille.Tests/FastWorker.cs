@@ -28,4 +28,8 @@ public class FastWorker : IWorker<WorkQueuesEvent> {
 		=> message.IsError ? 
 			Task.FromException (new InvalidOperationException($"Message with Id {message.Id} is an error")) :
 			Task.FromResult (Completion.TrySetResult(true));
+
+	public void Dispose () { }
+
+	public ValueTask DisposeAsync () => ValueTask.CompletedTask;
 }

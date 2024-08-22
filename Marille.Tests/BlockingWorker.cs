@@ -14,4 +14,8 @@ public class BlockingWorker (TaskCompletionSource<bool> readyToConsume) : IWorke
 		// increase the count in a thread safe way
 		Interlocked.Increment(ref consumed);
 	}
+
+	public void Dispose () { }
+
+	public ValueTask DisposeAsync () => ValueTask.CompletedTask;
 }

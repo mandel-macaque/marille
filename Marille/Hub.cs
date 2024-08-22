@@ -177,12 +177,7 @@ public class Hub : IHub {
 		// complete the channels, this wont throw an cancellation exception, it will stop the channels from writing
 		// and the consuming task will finish when it is done with the current message, therefore we can
 		// use that to know when we are done
-		topic.CloseChannel<T> ();
-		if (topicInfo.ConsumerTask is not null)
-			await topicInfo.ConsumerTask;
-
-		// clean behind us
-		topic.RemoveChannel<T> ();
+		await topic.CloseChannel<T> ();
 	}
 
 	bool TryGetChannel<T> (string topicName, [NotNullWhen(true)] out Topic? topic, [NotNullWhen(true)] out TopicInfo<T>? ch) where T : struct
@@ -306,7 +301,7 @@ public class Hub : IHub {
 				from ch in channels select ch;
 
 			foreach (var topicInfo in topicInfos) {
-				topicInfo.CloseChannel ();
+				await topicInfo.CloseChannel ();
 			}
 
 			await Task.WhenAll (consumingTasks);
@@ -328,4 +323,39 @@ public class Hub : IHub {
 			semaphoreSlim.Release ();
 		}
 	}
+	
+	#region IDisposable Support
+
+	protected virtual void Dispose (bool disposing)
+	{
+		if (disposing) {
+			semaphoreSlim.Dispose ();
+			// close all topics, that will close all channels and tasks should complete
+			foreach (var topic in topics.Values) {
+				topic.Dispose ();
+			}
+		}
+	}
+
+	public void Dispose ()
+	{
+		Dispose (true);
+		GC.SuppressFinalize (this);
+	}
+
+	protected virtual async ValueTask DisposeAsyncCore ()
+	{
+		semaphoreSlim.Dispose ();
+		foreach (Topic topic in topics.Values) {
+			await topic.DisposeAsync ();
+		}
+	}
+
+	public async ValueTask DisposeAsync ()
+	{
+		await DisposeAsyncCore ();
+		GC.SuppressFinalize (this);
+	}
+
+	#endregion
 }
