@@ -6,6 +6,7 @@ namespace Marille.Tests;
 public class WorkQueuesTests {
 	readonly Hub _hub;
 	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
+	readonly TaskCompletionSource<bool> _errorWorkerTcs;
 	TopicConfiguration _configuration;
 	readonly CancellationTokenSource _cancellationTokenSource;
 
@@ -14,7 +15,8 @@ public class WorkQueuesTests {
 		// use a simpler channel that we will use to receive the events when
 		// a worker has completed its work
 		_hub = new ();
-		_errorWorker = new();
+		_errorWorkerTcs = new();
+		_errorWorker = new(_errorWorkerTcs);
 		_configuration = new();
 		_cancellationTokenSource = new();
 		_cancellationTokenSource.CancelAfter (TimeSpan.FromSeconds (10));
@@ -88,5 +90,69 @@ public class WorkQueuesTests {
 		Assert.True (await tcsWorker1.Task);
 		Assert.False (tcsWorker2.Task.IsCompleted);
 		Assert.Equal (0, _errorWorker.ConsumedCount);
+	}
+	
+	[Theory]
+	[InlineData(1)]
+	[InlineData(10)]
+	[InlineData(100)]
+	[InlineData(1000)]
+	public async Task SeveralWorkersSyncCall (int workerCount)
+	{
+		// we create a collection of workers and will send a message to the topic, the workers will not
+		// be able to process the rest of the messages until all the previous workers have completed their job
+		var configuration = new TopicConfiguration { Mode = ChannelDeliveryMode.AtLeastOnceSync };
+		var workers = new List<(SleepyWorker Worker, TaskCompletionSource<bool> Tcs)> (workerCount);
+		for (var index = 0; index < workerCount; index++) {
+			var tcs = new TaskCompletionSource<bool> ();
+			var worker = new SleepyWorker($"worker{index + 1}", tcs);
+			workers.Add ((worker, tcs));
+		}
+
+		var topic = nameof (SeveralWorkersSyncCall);
+		await _hub.CreateAsync (topic, configuration, _errorWorker, workers.Select (x => x.Worker));
+		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));
+		var result = await Task.WhenAll (workers.Select (x => x.Tcs.Task));
+		Assert.Equal (workerCount, result.Length);
+		// assert that all did indeed return true
+		foreach (bool b in result) {
+			// find a nicer way to match the worker with the bool
+			Assert.True (b);
+		}
+	}
+
+	[Theory]
+	[InlineData(1)]
+	[InlineData(10)]
+	[InlineData(100)]
+	[InlineData(1000)]
+	public async Task SeveralWorkersSyncCallOneThrows (int workerCount)
+	{
+		var configuration = new TopicConfiguration { Mode = ChannelDeliveryMode.AtLeastOnceSync };
+		var workers = new List<(SleepyWorker Worker, TaskCompletionSource<bool> Tcs)> (workerCount + 1);
+		for (var index = 0; index < workerCount; index++) {
+			var tcs = new TaskCompletionSource<bool> ();
+			var worker = new SleepyWorker($"worker{index + 1}", tcs);
+			workers.Add ((worker, tcs));
+		}
+
+		var topic = nameof (SeveralWorkersSyncCallOneThrows);
+		// get all the workers and add an extra one that will throw an exception
+		var allWorkers = workers.Select (x => x.Worker as IWorker<WorkQueuesEvent>).ToList ();
+		var fastTcs = new TaskCompletionSource<bool> ();
+		var fastWorker = new FastWorker ("fast1", fastTcs);
+		allWorkers.Add (fastWorker);
+		await _hub.CreateAsync (topic, configuration, _errorWorker, allWorkers);
+		await _hub.Publish (topic, new WorkQueuesEvent ("myID", true));
+		var result = await Task.WhenAll (workers.Select (x => x.Tcs.Task));
+		Assert.Equal (workerCount, result.Length);
+		// assert that all did indeed return true
+		foreach (bool b in result) {
+			// find a nicer way to match the worker with the bool
+			Assert.True (b);
+		}
+		// wait until we have processed the error, else we are going to finish the test too early
+		await _errorWorkerTcs.Task;
+		Assert.Equal (1, _errorWorker.ConsumedCount);
 	}
 }
