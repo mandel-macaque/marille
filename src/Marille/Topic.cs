@@ -7,12 +7,11 @@ internal class Topic (string name) : IDisposable, IAsyncDisposable {
 	readonly Dictionary<Type, TopicInfo> channels = new();
 
 	public string Name { get; } = name;
+	public int ChannelCount => channels.Count;
 
 	public IEnumerable<Task> ConsumerTasks => from info in channels.Values
 		where info.ConsumerTask is not null
 		select info.ConsumerTask;
-	
-	public IEnumerable<TopicInfo> Channels => channels.Values;
 
 	public bool TryGetChannel<T> ([NotNullWhen (true)] out TopicInfo<T>? channel) where T : struct
 	{
@@ -39,14 +38,12 @@ internal class Topic (string name) : IDisposable, IAsyncDisposable {
 		return obj;
 	}
 
-	public async Task CloseChannel<T> () where T : struct
+	public async Task RemoveChannel<T> () where T : struct
 	{
-		// stop the channel from receiving events, this means that
-		// eventually our dispatchers will complete
-		if (!TryGetChannel<T> (out var chInfo))
+		if (!TryGetChannel<T> (out var topicInfo))
 			return;
 
-		await chInfo.CloseChannel ();
+		await topicInfo.DisposeAsync ();
 		channels.Remove (typeof (T));
 	}
 
