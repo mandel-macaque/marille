@@ -23,19 +23,21 @@ internal class Topic (string name) : IDisposable, IAsyncDisposable {
 		return channel is not null;
 	}
 
-	public TopicInfo<T> CreateChannel<T> (TopicConfiguration configuration, IErrorWorker<T> errorWorker,
+	public bool TryCreateChannel<T> (TopicConfiguration configuration,
+		[NotNullWhen(true)] out TopicInfo<T>? topicInfo, IErrorWorker<T> errorWorker, 
 		params IWorker<T>[] workers) where T : struct
 	{
 		Type type = typeof (T);
-		if (!TryGetChannel<T> (out var obj)) {
+		if (!TryGetChannel (out topicInfo)) {
 			var ch = (configuration.Capacity is null) ? 
 				Channel.CreateUnbounded<Message<T>> () : 
 				Channel.CreateBounded<Message<T>> (configuration.Capacity.Value);
-			obj = new(configuration, ch, errorWorker, workers);
-			channels[type] = obj; 
+			topicInfo = new(configuration, ch, errorWorker, workers);
+			channels[type] = topicInfo;
+			return true;
 		}
 
-		return obj;
+		return false;
 	}
 
 	public async Task RemoveChannel<T> () where T : struct

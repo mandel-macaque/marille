@@ -7,7 +7,7 @@ public class TopicTests : IDisposable {
 	public TopicTests ()
 	{
 		_topic = new (nameof(TopicTests));
-		_configuration =  new() { Mode = ChannelDeliveryMode.AtMostOnceAsync };
+		_configuration = new() { Mode = ChannelDeliveryMode.AtMostOnceAsync };
 	}
 	
 	public void Dispose ()
@@ -27,8 +27,8 @@ public class TopicTests : IDisposable {
 		// add several channels with different events and ensure that we only have the right amount
 		var errorWorker = new ErrorWorker<int> ();
 		var errorWorker2 = new ErrorWorker<WorkQueuesEvent> ();
-		var info = _topic.CreateChannel (_configuration, errorWorker);
-		var info2 = _topic.CreateChannel (_configuration, errorWorker2);
+		Assert.True (_topic.TryCreateChannel (_configuration, out var info, errorWorker));
+		Assert.True (_topic.TryCreateChannel (_configuration, out var info2, errorWorker2));
 		Assert.NotSame (info, info2);
 	}
 	
@@ -37,8 +37,8 @@ public class TopicTests : IDisposable {
 	{
 		// ensure that we do not recreate the channel
 		var errorWorker = new ErrorWorker<int> ();
-		var info = _topic.CreateChannel (_configuration, errorWorker);
-		var info2 = _topic.CreateChannel (_configuration, errorWorker);
+		Assert.True (_topic.TryCreateChannel (_configuration, out var info, errorWorker));
+		Assert.False (_topic.TryCreateChannel (_configuration, out var info2, errorWorker));
 		Assert.Same (info, info2);
 	}
 	
@@ -47,7 +47,7 @@ public class TopicTests : IDisposable {
 	{
 		// remove the channel and ensure that it will be empty
 		var errorWorker = new ErrorWorker<int> ();
-		_ = _topic.CreateChannel (_configuration, errorWorker);
+		Assert.True (_topic.TryCreateChannel (_configuration, out _, errorWorker));
 		Assert.Equal (1, _topic.ChannelCount);
 		await _topic.RemoveChannel<int> ();
 		Assert.Equal (0, _topic.ChannelCount);
@@ -59,8 +59,8 @@ public class TopicTests : IDisposable {
 		// ensure that only once channel will be removed
 		var errorWorker = new ErrorWorker<int> ();
 		var errorWorker2 = new ErrorWorker<WorkQueuesEvent> ();
-		var info = _topic.CreateChannel (_configuration, errorWorker);
-		var info2 = _topic.CreateChannel (_configuration, errorWorker2);
+		Assert.True (_topic.TryCreateChannel (_configuration, out _, errorWorker));
+		Assert.True (_topic.TryCreateChannel (_configuration, out _, errorWorker2));
 		Assert.Equal (2, _topic.ChannelCount);
 		await _topic.RemoveChannel<int> ();
 		Assert.Equal (1, _topic.ChannelCount);

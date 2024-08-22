@@ -199,11 +199,9 @@ public class Hub : IHub {
 				topics [topicName] = topic;
 			}
 
-			if (topic.TryGetChannel<T> (out _)) {
+			if (!topic.TryCreateChannel (configuration, out var topicInfo, errorWorker, initialWorkers))
 				return false;
-			}
 
-			var topicInfo = topic.CreateChannel (configuration, errorWorker, initialWorkers);
 			await StartConsuming (topicInfo);
 			return true;
 		} finally {
