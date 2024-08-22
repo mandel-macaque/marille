@@ -259,13 +259,18 @@ public class Hub : IHub {
 	public Task<bool> RegisterAsync<T> (string topicName, Func<T, CancellationToken, Task> action)  where T : struct
 		=> RegisterAsync (topicName, new LambdaWorker<T> (action));
 
-	public ValueTask Publish<T> (string topicName, T publishedEvent) where T : struct
+	public async ValueTask Publish<T> (string topicName, T publishedEvent) where T : struct
 	{
-		if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
-			throw new InvalidOperationException (
-				$"Channel with topic {topicName} for event type {typeof(T)} not found");
-		var message = new Message<T> (MessageType.Data, publishedEvent);
-		return topicInfo.Channel.Writer.WriteAsync (message);
+		await semaphoreSlim.WaitAsync ();
+		try {
+			if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
+				throw new InvalidOperationException (
+					$"Channel with topic {topicName} for event type {typeof (T)} not found");
+			var message = new Message<T> (MessageType.Data, publishedEvent);
+			await topicInfo.Channel.Writer.WriteAsync (message);
+		} finally {
+			semaphoreSlim.Release ();
+		}
 	}
 
 	public async Task CloseAllAsync ()
