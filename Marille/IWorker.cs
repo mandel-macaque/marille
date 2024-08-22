@@ -4,7 +4,7 @@ namespace Marille;
 /// Represents a worker that will be able to consume messages from a given topic channel.
 /// </summary>
 /// <typeparam name="T">The type of events consumed by the worker.</typeparam>
-public interface IWorker<in T> where T :  struct {
+public interface IWorker<in T> : IDisposable, IAsyncDisposable where T :  struct {
 
 	/// <summary>
 	/// Method that will be executed for every event in the channel that has been assigned

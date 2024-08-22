@@ -1,6 +1,6 @@
 namespace Marille.Tests;
 
-public class RegistrationTests {
+public class RegistrationTests : IDisposable {
 	readonly Hub _hub;
 	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
 	readonly SemaphoreSlim _semaphoreSlim;
@@ -11,6 +11,13 @@ public class RegistrationTests {
 		_hub = new (_semaphoreSlim);
 		_errorWorker = new();
 	} 
+	
+	public void Dispose ()
+	{
+		_hub.Dispose ();
+		_errorWorker.Dispose ();
+		_semaphoreSlim.Dispose ();
+	}
 
 	[Fact]
 	public async Task SingleOneToOneCreation ()
@@ -120,4 +127,5 @@ public class RegistrationTests {
 		}
 		Assert.False (finalResult);
 	}
+
 }

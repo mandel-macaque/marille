@@ -3,7 +3,7 @@ namespace Marille.Tests;
 // Set of tests that focus on the pattern in which a 
 // several consumers register to a queue and the compete
 // to consume an event.
-public class WorkQueuesTests {
+public class WorkQueuesTests : IDisposable {
 	readonly Hub _hub;
 	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
 	readonly TaskCompletionSource<bool> _errorWorkerTcs;
@@ -20,6 +20,13 @@ public class WorkQueuesTests {
 		_configuration = new();
 		_cancellationTokenSource = new();
 		_cancellationTokenSource.CancelAfter (TimeSpan.FromSeconds (10));
+	}
+	
+	public void Dispose ()
+	{
+		_hub.Dispose ();
+		_errorWorker.Dispose ();
+		_cancellationTokenSource.Dispose ();
 	}
 
 	// The simplest API usage, we register to an event for a topic with our worker
@@ -155,4 +162,5 @@ public class WorkQueuesTests {
 		await _errorWorkerTcs.Task;
 		Assert.Equal (1, _errorWorker.ConsumedCount);
 	}
+
 }

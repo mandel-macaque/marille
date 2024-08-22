@@ -27,4 +27,15 @@ public class ErrorWorker<T> : IErrorWorker<T> where T :  struct {
 			_semaphoreSlim.Release ();
 		}
 	}
+
+	public void Dispose ()
+	{
+		_semaphoreSlim.Dispose ();
+	}
+
+	public ValueTask DisposeAsync ()
+	{
+		_semaphoreSlim.Dispose ();
+		return ValueTask.CompletedTask;
+	}
 }

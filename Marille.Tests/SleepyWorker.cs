@@ -17,4 +17,8 @@ public class SleepyWorker : IWorker<WorkQueuesEvent> {
 		await Task.Delay (TimeSpan.FromMilliseconds (sleep));
 		Completion.TrySetResult (true);
 	}
+
+	public void Dispose () { }
+
+	public ValueTask DisposeAsync () => ValueTask.CompletedTask;
 }

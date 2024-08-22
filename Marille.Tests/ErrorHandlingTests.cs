@@ -1,6 +1,6 @@
 namespace Marille.Tests;
 
-public class ErrorHandlingTests {
+public class ErrorHandlingTests : IDisposable {
 
 	readonly Hub _hub;
 	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
@@ -13,6 +13,12 @@ public class ErrorHandlingTests {
 		_errorWorkerTcs = new();
 		_errorWorker = new(_errorWorkerTcs);
 		_configuration = new();
+	}
+	
+	public void Dispose ()
+	{
+		_hub.Dispose ();
+		_errorWorker.Dispose ();
 	}
 	
 	[Fact]

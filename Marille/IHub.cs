@@ -5,7 +5,7 @@ namespace Marille;
 /// can be used to deliver messages to workers. The Hub is responsible for creating channels, adding workers to them,
 /// and delivering messages to the workers.
 /// </summary>
-public interface IHub {
+public interface IHub : IDisposable, IAsyncDisposable {
 	
 	/// <summary>
 	/// Attempts to create a new channel for the given topic name using the provided configuration. Channels cannot

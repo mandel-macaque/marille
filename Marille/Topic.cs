@@ -3,7 +3,7 @@ using System.Threading.Channels;
 
 namespace Marille;
 
-internal class Topic (string name) {
+internal class Topic (string name) : IDisposable, IAsyncDisposable {
 	readonly Dictionary<Type, TopicInfo> channels = new();
 
 	public string Name { get; } = name;
@@ -39,20 +39,46 @@ internal class Topic (string name) {
 		return obj;
 	}
 
-	public void CloseChannel<T> () where T : struct
+	public async Task CloseChannel<T> () where T : struct
 	{
 		// stop the channel from receiving events, this means that
 		// eventually our dispatchers will complete
 		if (!TryGetChannel<T> (out var chInfo))
 			return;
 
-		chInfo.CloseChannel ();
+		await chInfo.CloseChannel ();
 		channels.Remove (typeof (T));
 	}
 
-	public bool ContainsChannel<T> ()
-		=> channels.ContainsKey (typeof (T));
+	#region IDisposable Support
 
-	public bool RemoveChannel<T> ()
-		=> channels.Remove (typeof (T));
+	protected virtual void Dispose (bool disposing)
+	{
+		if (disposing) {
+			foreach (var topicInfo in channels.Values) {
+				topicInfo.Dispose ();
+			}
+		}
+	}
+
+	public void Dispose ()
+	{
+		Dispose (true);
+		GC.SuppressFinalize (this);
+	}
+
+	protected virtual async ValueTask DisposeAsyncCore ()
+	{
+		foreach (var topicInfo in channels.Values) {
+			await topicInfo.DisposeAsync ();
+		}
+	}
+
+	public async ValueTask DisposeAsync ()
+	{
+		await DisposeAsyncCore ();
+		GC.SuppressFinalize (this);
+	}
+
+	#endregion
 }

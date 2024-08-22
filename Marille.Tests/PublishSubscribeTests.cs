@@ -1,6 +1,6 @@
 namespace Marille.Tests;
 
-public class PublishSubscribeTests {
+public class PublishSubscribeTests : IDisposable {
 	readonly Hub _hub;
 	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
 	readonly TopicConfiguration _configuration;
@@ -12,6 +12,12 @@ public class PublishSubscribeTests {
 		_hub = new ();
 		_errorWorker = new();
 		_configuration = new();
+	}
+	
+	public void Dispose ()
+	{
+		_hub.Dispose ();
+		_errorWorker.Dispose ();
 	}
 
 	[Theory]
@@ -73,4 +79,5 @@ public class PublishSubscribeTests {
 			Assert.True (b);
 		}
 	}
+	
 }
