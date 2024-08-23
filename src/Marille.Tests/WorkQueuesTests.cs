@@ -42,7 +42,7 @@ public class WorkQueuesTests : IDisposable {
 		var worker = new FastWorker ("myWorkerID", tcs);
 		await _hub.CreateAsync (topic, _configuration, _errorWorker);
 		await _hub.RegisterAsync (topic, worker);
-		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID"));
 		Assert.True (await tcs.Task);
 		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
@@ -60,7 +60,7 @@ public class WorkQueuesTests : IDisposable {
 
 		await _hub.CreateAsync (topic, _configuration, _errorWorker);
 		Assert.True (await _hub.RegisterAsync (topic, action));
-		await _hub.Publish (topic, new WorkQueuesEvent("myID"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent("myID"));
 		Assert.True (await tcs.Task);
 		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
@@ -91,7 +91,7 @@ public class WorkQueuesTests : IDisposable {
 		Assert.True (await _hub.RegisterAsync (topic2, worker2));
 
 		// publish two both topics and ensure that each of the workers gets teh right data
-		await _hub.Publish (topic1, new WorkQueuesEvent ("1"));
+		await _hub.PublishAsync (topic1, new WorkQueuesEvent ("1"));
 
 		// we should only get the event in topic one, the second topic should be ignored
 		Assert.True (await tcsWorker1.Task);
@@ -118,7 +118,7 @@ public class WorkQueuesTests : IDisposable {
 
 		var topic = nameof (SeveralWorkersSyncCall);
 		await _hub.CreateAsync (topic, configuration, _errorWorker, workers.Select (x => x.Worker));
-		await _hub.Publish (topic, new WorkQueuesEvent ("myID"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID"));
 		var result = await Task.WhenAll (workers.Select (x => x.Tcs.Task));
 		Assert.Equal (workerCount, result.Length);
 		// assert that all did indeed return true
@@ -150,7 +150,7 @@ public class WorkQueuesTests : IDisposable {
 		var fastWorker = new FastWorker ("fast1", fastTcs);
 		allWorkers.Add (fastWorker);
 		await _hub.CreateAsync (topic, configuration, _errorWorker, allWorkers);
-		await _hub.Publish (topic, new WorkQueuesEvent ("myID", true));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID", true));
 		var result = await Task.WhenAll (workers.Select (x => x.Tcs.Task));
 		Assert.Equal (workerCount, result.Length);
 		// assert that all did indeed return true
