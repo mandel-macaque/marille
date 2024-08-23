@@ -21,4 +21,8 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\Marille\Marille.csproj" />
 	</ItemGroup>
+	
+	<ItemGroup>
+	  <PackageReference Include="Mime" Version="3.6.0" />
+	</ItemGroup>
 </Project>
