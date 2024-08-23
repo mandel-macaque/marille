@@ -397,3 +397,6 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 *.idea
+
+# Mac OS annoying files
+.DS_Store

@@ -7,6 +7,12 @@ namespace Marille;
 public interface IWorker<in T> : IDisposable, IAsyncDisposable where T :  struct {
 
 	/// <summary>
+	/// Specifies if the worker should use a background thread to process the messages. If set to
+	/// true the implementation of the worker should be thread safe.
+	/// </summary>
+	public bool UseBackgroundThread { get; }
+
+	/// <summary>
 	/// Method that will be executed for every event in the channel that has been assigned
 	/// to the worker instance.
 	/// </summary>
