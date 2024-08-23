@@ -114,15 +114,21 @@ public class Hub : IHub {
 				if (item.Type == MessageType.Ack) 
 					continue;
 				if (item.IsError) {
-					// do wait for the error worker to finish, we do not want to lose any error
-					if (errorWorker.UseBackgroundThread)
-						await Task.Run (async () => {
+					// do wait for the error worker to finish, we do not want to lose any error. We are going to wrap
+					// the error task in a try/catch to make sure that if the user did raise an exception, we do not
+					// crash the whole consuming task. Sometimes java was right when adding exceptions to a method signature
+					try {
+						if (errorWorker.UseBackgroundThread)
+							await Task.Run (async () => {
+								await errorWorker.ConsumeAsync (
+									item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
+							}, cancellationToken);
+						else
 							await errorWorker.ConsumeAsync (
 								item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
-						}, cancellationToken);
-					else
-						await errorWorker.ConsumeAsync (
-							item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
+					} catch {
+						// do nothing for now. We will add logging later
+					}
 					continue;
 				}
 				switch (configuration.Mode) {
