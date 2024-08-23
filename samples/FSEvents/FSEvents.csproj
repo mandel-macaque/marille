@@ -19,6 +19,6 @@
 	</PropertyGroup>
 	
 	<ItemGroup>
-	  <ProjectReference Include="..\Marille\Marille.csproj" />
+	  <ProjectReference Include="..\..\src\Marille\Marille.csproj" />
 	</ItemGroup>
 </Project>

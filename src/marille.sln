@@ -7,8 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Marille", "Marille\Marille.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Marille.Tests", "Marille.Tests\Marille.Tests.csproj", "{FF90F48D-F925-4BD9-8315-ED7DEFEAA1EE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FSEvents", "FSEvents\FSEvents.csproj", "{FD1AB509-63F1-4023-851A-756CF3C8B553}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,9 +24,5 @@ Global
 		{FF90F48D-F925-4BD9-8315-ED7DEFEAA1EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FF90F48D-F925-4BD9-8315-ED7DEFEAA1EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FF90F48D-F925-4BD9-8315-ED7DEFEAA1EE}.Release|Any CPU.Build.0 = Release|Any CPU
-		{FD1AB509-63F1-4023-851A-756CF3C8B553}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{FD1AB509-63F1-4023-851A-756CF3C8B553}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{FD1AB509-63F1-4023-851A-756CF3C8B553}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{FD1AB509-63F1-4023-851A-756CF3C8B553}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
