@@ -1,4 +1,5 @@
 using CoreServices;
+using Serilog;
 
 namespace Marille.Workers;
 
@@ -7,7 +8,9 @@ public sealed class FSEventsErrorHandler : IErrorWorker<FSEvent> {
 
 	public Task ConsumeAsync (FSEvent message, Exception exception, CancellationToken token = default)
 	{
-		throw new NotImplementedException ();
+		// log the error and the event that caused it, there is not much we can do about it
+		Log.Error (exception, "Error processing event {Event}", message);
+		return Task.CompletedTask;
 	}
 
 	public void Dispose () { }

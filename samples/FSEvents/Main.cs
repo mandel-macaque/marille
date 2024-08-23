@@ -5,10 +5,28 @@ using CoreServices;
 using ObjCRuntime;
 
 using Marille.Workers;
+using Serilog;
 
 namespace Marille;
 
 static class MainClass {
+
+	#region Helpers
+	static void InitializeLog ()
+	{
+		LoggerConfiguration logConfiguration = new LoggerConfiguration ()
+			.Enrich.WithThreadId ()
+			.Enrich.WithThreadName ();
+
+		logConfiguration.MinimumLevel.Debug ();
+
+		// thread id == min level of log
+		Log.Logger = logConfiguration
+			.WriteTo.Console (outputTemplate: "{Timestamp:HH:mm:ss} [{Level}] ({ThreadId}) {Message}{NewLine}{Exception}")
+			.CreateLogger ();
+	}
+	
+	#endregion
 
 	static int Main (string [] args)
 	{
@@ -44,6 +62,9 @@ static class MainClass {
 
 	static int Main2 (string [] args)
 	{
+		// Add logging so that we can see what is going on
+		InitializeLog ();
+
 		// we need to create several things to be able to get the events:
 		// 1. Hub: will be used to deliver the events to the consumers.
 		// 2. Worker: will be used to process the events.
@@ -55,11 +76,12 @@ static class MainClass {
 		Task.Run (async () => {
 			// workers will be disposed by the hub
 			//var worker = new LogEventToConsole ();
-			var fileWorker = new LogEventToFile ("/Users/mandel/Desktop/marille.log");
 			var eventFilter = new EventFilterer (_hub);
+			var diffGenerator = new DiffGenerator ();
+			
 			var fsEventsErrorHandler = new FSEventsErrorHandler ();
 			var textfileErrorHandler = new TextFileChangedErrorHandler ();
-			var diffGenerator = new DiffGenerator ();
+			
 			var fsEventsConfig = new TopicConfiguration {
 				Mode = ChannelDeliveryMode.AtLeastOnceSync
 			};
@@ -67,9 +89,10 @@ static class MainClass {
 				Mode = ChannelDeliveryMode.AtMostOnceAsync
 			};
 			await _hub.CreateAsync (nameof (FSMonitor), txtEventsConfig, textfileErrorHandler, diffGenerator);
-			await _hub.CreateAsync (nameof (FSMonitor), fsEventsConfig, fsEventsErrorHandler, fileWorker, eventFilter);
+			await _hub.CreateAsync (nameof (FSMonitor), fsEventsConfig, fsEventsErrorHandler, eventFilter);
 			Console.WriteLine ("Channel created");
 		});
+
 		var monitor = new FSMonitor ("/Users/mandel/Xamarin", _hub, FSEventStreamCreateFlags.FileEvents | FSEventStreamCreateFlags.WatchRoot);
 		monitor.ScheduleWithRunLoop (NSRunLoop.Current);
 		Console.WriteLine ("FSEvent monitor scheduled");

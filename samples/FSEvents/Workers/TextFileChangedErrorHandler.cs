@@ -1,10 +1,13 @@
+using Serilog;
+
 namespace Marille.Workers;
 
 public class TextFileChangedErrorHandler : IErrorWorker<TextFileChangedEvent> {
 	public bool UseBackgroundThread => false;
 	public Task ConsumeAsync (TextFileChangedEvent message, Exception exception, CancellationToken token = default)
 	{
-		throw new NotImplementedException ();
+		Log.Error (exception, "Error processing event {Event}", message);
+		return Task.CompletedTask;
 	}
 
 	public void Dispose () { }
