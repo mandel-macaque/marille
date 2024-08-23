@@ -1,3 +1,5 @@
+using Marille.Tests.Workers;
+
 namespace Marille.Tests;
 
 public class CancellationTests : IDisposable {

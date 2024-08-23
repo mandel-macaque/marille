@@ -1,4 +1,4 @@
-namespace Marille.Tests;
+namespace Marille.Tests.Workers;
 
 public class ErrorWorker<T> : IErrorWorker<T> where T :  struct {
 
@@ -15,7 +15,9 @@ public class ErrorWorker<T> : IErrorWorker<T> where T :  struct {
 	{
 		TaskCompletionSource = tcs;
 	}
-	
+
+	public bool UseBackgroundThread => false;
+
 	public async Task ConsumeAsync (T message, Exception exception, CancellationToken token = default)
 	{
 		await _semaphoreSlim.WaitAsync ();

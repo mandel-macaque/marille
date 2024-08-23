@@ -1,3 +1,5 @@
+using Marille.Tests.Workers;
+
 namespace Marille.Tests;
 
 // this worked will block not consume events until the task completion source is triggered, this way
@@ -7,6 +9,7 @@ public class BlockingWorker (TaskCompletionSource<bool> readyToConsume) : IWorke
 	public int ConsumedCount => consumed;
 	public TaskCompletionSource<bool> ReadyToConsume { get; private set; } = readyToConsume;
 
+	public bool UseBackgroundThread => false;
 	public async Task ConsumeAsync (WorkQueuesEvent message, CancellationToken token = default)
 	{
 		// use this as a way to block the worker

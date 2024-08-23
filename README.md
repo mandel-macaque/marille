@@ -13,8 +13,8 @@ messages that they distribute. The normal pattern for usage is as follows:
 You can think about Marille as an in-process pub/sub similar to a distributed queue with the difference
 that the constraints are much simpler. Working within the same process makes dealing with failure much easier.
 
-The library does not impose any thread usage and it fully relies on the default [TaskScheduler](https://learn.microsoft.com/en-us/dotnet/fundamentals/runtime-libraries/system-threading-tasks-taskscheduler) used in the application, that is, there are no Task.Run calls to be found in the 
-source of the library. 
+The library does not impose any thread usage and it fully relies on the default [TaskScheduler](https://learn.microsoft.com/en-us/dotnet/fundamentals/runtime-libraries/system-threading-tasks-taskscheduler) used in 
+the application.
 
 ## Examples
 
@@ -33,13 +33,18 @@ public record struct MyMessage (string Id, string Operation, int Value);
 
 // create a worker type with the minimum implementation 
 class MyWorker : IWorker<MyMessage> {
-    // Workers will be scheduled by the default TaskScheduler from dotnet
+    
+    // Workers will be by default considered to be IO bound unless specified otherwise
+    public bool UseBackgroundThread => false;
+
     public Task ConsumeAsync (MyMessage message, CancellationToken cancellationToken = default)
        => Task.FromResult (Completion.TrySetResult(true));
 }
 
 // creeate an error worker to handle exceptions from workers
 class ErrorWorker : IErrorWorker<MyMessage> {
+    public bool UseBackgroundThread => false;
+    
     public Task ConsumeAsync (MyMessage message, Exception exception, CancellationToken cancellationToken = default)
         => Task.FromResult (Completion.TrySetResult(true));
 }

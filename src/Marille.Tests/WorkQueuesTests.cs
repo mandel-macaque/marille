@@ -1,3 +1,5 @@
+using Marille.Tests.Workers;
+
 namespace Marille.Tests;
 
 // Set of tests that focus on the pattern in which a 
