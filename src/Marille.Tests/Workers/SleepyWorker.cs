@@ -1,4 +1,4 @@
-namespace Marille.Tests;
+namespace Marille.Tests.Workers;
 
 public class SleepyWorker : IWorker<WorkQueuesEvent> {
 	Random random = new Random ();
@@ -10,6 +10,8 @@ public class SleepyWorker : IWorker<WorkQueuesEvent> {
 		Id = id;
 		Completion = tcs;
 	}
+
+	public bool UseBackgroundThread => false;
 
 	public async Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
 	{

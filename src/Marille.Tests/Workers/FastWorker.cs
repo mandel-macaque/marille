@@ -1,4 +1,4 @@
-namespace Marille.Tests;
+namespace Marille.Tests.Workers;
 
 public struct WorkQueuesEvent {
 
@@ -24,6 +24,7 @@ public class FastWorker : IWorker<WorkQueuesEvent> {
 		Completion = tcs;
 	}
 
+	public bool UseBackgroundThread => false;
 	public Task ConsumeAsync (WorkQueuesEvent message, CancellationToken cancellationToken = default)
 		=> message.IsError ? 
 			Task.FromException (new InvalidOperationException($"Message with Id {message.Id} is an error")) :

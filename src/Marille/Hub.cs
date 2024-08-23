@@ -20,14 +20,14 @@ public class Hub : IHub {
 		where T : struct
 	{
 		try {
-			await task;
+			await task.ConfigureAwait (false);
 		} catch (OperationCanceledException) {
 			// retry on cancel
-			await channel.Writer.WriteAsync (item);
+			await channel.Writer.WriteAsync (item).ConfigureAwait (false);
 		} catch (Exception e) {
 			// pump an error message back to the channel that will be dealt by the error worker
 			var error = new Message<T> (item.Payload, e);
-			await channel.Writer.WriteAsync (error);
+			await channel.Writer.WriteAsync (error).ConfigureAwait (false);
 		}
 	}
 
@@ -35,7 +35,7 @@ public class Hub : IHub {
 		TimeSpan? timeout)
 		where T : struct
 	{
-		Parallel.ForEach (workersArray, worker => {
+		Parallel.ForEachAsync  (workersArray, async (worker, _) => {
 			CancellationToken token = default;
 			if (timeout.HasValue) {
 				var cts = new CancellationTokenSource ();
@@ -43,14 +43,7 @@ public class Hub : IHub {
 				token = cts.Token;
 			}
 			var task = worker.ConsumeAsync (item.Payload, token);
-			// retry on cancel
-			task.ContinueWith (async _ => { await channel.Writer.WriteAsync (item); },
-				TaskContinuationOptions.OnlyOnCanceled);  // TODO: max retries
-			// pump an error message back to the channel that will be dealt by the error worker
-			task.ContinueWith (async (t) => {
-				var error = new Message<T> (item.Payload, t.Exception!);
-				await channel.Writer.WriteAsync (error);
-			}, TaskContinuationOptions.OnlyOnFaulted);
+			await HandleConsumerError (task, channel, item);
 		});
 	}
 
@@ -70,7 +63,13 @@ public class Hub : IHub {
 		var tasks = new Task [workersArray.Length];
 		for(var index = 0; index < workersArray.Length; index++) {
 			var worker = workersArray [index];
-			tasks [index] = worker.ConsumeAsync (item.Payload, token);
+			if (worker.UseBackgroundThread) {
+				tasks [index] = Task.Run (async () => {
+					await worker.ConsumeAsync (item.Payload, token).ConfigureAwait (false);
+				}, token);
+			} else {
+				tasks [index] = worker.ConsumeAsync (item.Payload, token);
+			}
 		}
 		return HandleConsumerError (Task.WhenAll (tasks), channel, item);
 	}
@@ -89,7 +88,12 @@ public class Hub : IHub {
 			token = cts.Token;
 		}
 
-		return HandleConsumerError ( worker.ConsumeAsync (item.Payload, token), channel, item);
+		var task = worker.UseBackgroundThread ? 
+			Task.Run (async () => { 
+				await worker.ConsumeAsync (item.Payload, token).ConfigureAwait (false);
+			}, token) :
+			worker.ConsumeAsync (item.Payload, token);
+		return HandleConsumerError (task, channel, item); 
 	}
 
 	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
@@ -103,7 +107,7 @@ public class Hub : IHub {
 
 		// we want to set the completion source to true ONLY when we are consuming, that happens the first time
 		// we have a WaitToReadAsync result. The or will ensure we do not call try set result more than once
-		while (await ch.Reader.WaitToReadAsync (cancellationToken) 
+		while (await ch.Reader.WaitToReadAsync (cancellationToken).ConfigureAwait (false) 
 		       && (completionSource.Task.IsCompleted || completionSource.TrySetResult (true))) {
 			while (ch.Reader.TryRead (out var item)) {
 				// filter the ack message since it is only used to make sure that the task is indeed consuming
@@ -111,7 +115,14 @@ public class Hub : IHub {
 					continue;
 				if (item.IsError) {
 					// do wait for the error worker to finish, we do not want to lose any error
-					await errorWorker.ConsumeAsync (item.Payload, item.Exception, cancellationToken);
+					if (errorWorker.UseBackgroundThread)
+						await Task.Run (async () => {
+							await errorWorker.ConsumeAsync (
+								item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
+						}, cancellationToken);
+					else
+						await errorWorker.ConsumeAsync (
+							item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
 					continue;
 				}
 				switch (configuration.Mode) {
@@ -120,14 +131,16 @@ public class Hub : IHub {
 					break;
 				case ChannelDeliveryMode.AtLeastOnceSync:
 					// make the call 'sync' by not processing an item until we are done with the current one
-					await DeliverAtLeastOnceSync (ch, workersArray, item, configuration.Timeout);
+					await DeliverAtLeastOnceSync (
+						ch, workersArray, item, configuration.Timeout).ConfigureAwait (false);
 					break;
 				case ChannelDeliveryMode.AtMostOnceAsync:
-					_ = DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout);
+					_ = Task.Run (async () => 
+						await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout), cancellationToken);
 					break;
 				case ChannelDeliveryMode.AtMostOnceSync:
 					// make the call 'sync' by not processing an item until we are done with the current one
-					await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout);
+					await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout).ConfigureAwait (false);
 					break;
 				}
 			}
@@ -144,7 +157,7 @@ public class Hub : IHub {
 		//    in which we are running a thread and try to modify a collection, 
 		//    we cancel the thread, use the channel as a buffer and do the changes
 		if (topicInfo.CancellationTokenSource is not null)
-			await topicInfo.CancellationTokenSource.CancelAsync ();
+			await topicInfo.CancellationTokenSource.CancelAsync ().ConfigureAwait (false);
 
 		// create a new source for the topic, we cannot use the one that we used to cancel the previous one
 		topicInfo.CancellationTokenSource = new ();
@@ -157,7 +170,7 @@ public class Hub : IHub {
 			topicInfo.Configuration, topicInfo.Channel, topicInfo.ErrorWorker, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
 		// send a message with a ack so that we can ensure we are indeed running
 		_ = topicInfo.Channel.Writer.WriteAsync (new (MessageType.Ack), topicInfo.CancellationTokenSource.Token);
-		return await completionSource.Task;
+		return await completionSource.Task.ConfigureAwait (false);
 	}
 
 	void StopConsuming<T> (string topicName) where T : struct
@@ -192,7 +205,7 @@ public class Hub : IHub {
 			return false;
 
 		// the topic might already have the channel, in that case, do nothing
-		await semaphoreSlim.WaitAsync ();
+		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
 		try {
 			if (!topics.TryGetValue (topicName, out Topic? topic)) {
 				topic = new(topicName);
@@ -202,7 +215,7 @@ public class Hub : IHub {
 			if (!topic.TryCreateChannel (configuration, out var topicInfo, errorWorker, initialWorkers))
 				return false;
 
-			await StartConsuming (topicInfo);
+			await StartConsuming (topicInfo).ConfigureAwait (false);
 			return true;
 		} finally {
 			semaphoreSlim.Release ( );
@@ -233,7 +246,7 @@ public class Hub : IHub {
 
 	public async Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
 	{
-		await semaphoreSlim.WaitAsync ();
+		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
 		try {
 			// we only allow the client to register to an existing topic
 			// in this API we will not create it, there are other APIs for that
@@ -248,7 +261,7 @@ public class Hub : IHub {
 			// but we do not need to close the channel, the API will buffer
 			StopConsuming<T> (topicName);
 			topicInfo.Workers.AddRange (newWorkers);
-			return await StartConsuming (topicInfo);
+			return await StartConsuming (topicInfo).ConfigureAwait (false);
 		} finally {
 			semaphoreSlim.Release ();
 		}
@@ -259,13 +272,13 @@ public class Hub : IHub {
 
 	public async ValueTask PublishAsync<T> (string topicName, T publishedEvent) where T : struct
 	{
-		await semaphoreSlim.WaitAsync ();
+		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
 		try {
 			if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
 				throw new InvalidOperationException (
 					$"Channel with topic {topicName} for event type {typeof (T)} not found");
 			var message = new Message<T> (MessageType.Data, publishedEvent);
-			await topicInfo.Channel.Writer.WriteAsync (message);
+			await topicInfo.Channel.Writer.WriteAsync (message).ConfigureAwait (false);
 		} finally {
 			semaphoreSlim.Release ();
 		}
@@ -297,7 +310,7 @@ public class Hub : IHub {
 		// `Task.WhenAll (consumingTasks!);` 
 		//
 		// suppressing the warning is ugly when we do know how to help the compiler ;)
-		await semaphoreSlim.WaitAsync ();
+		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
 		try {
 			var consumingTasks = from topic in topics.Values
 				let tasks = topic.ConsumerTasks
@@ -305,12 +318,12 @@ public class Hub : IHub {
 
 			// dispose all the topics, that will dispose all the channels and tasks should complete
 			foreach (var info in topics.Values) {
-				await info.DisposeAsync ();
+				await info.DisposeAsync ().ConfigureAwait (false);
 			}
 			topics.Clear ();
 
 			// the DisposeAsync should be closing the channels, but we will wait for the tasks to finish anyway
-			await Task.WhenAll (consumingTasks);
+			await Task.WhenAll (consumingTasks).ConfigureAwait (false);
 		} finally {
 			semaphoreSlim.Release ();
 		}
@@ -318,14 +331,14 @@ public class Hub : IHub {
 
 	public async Task<bool> CloseAsync<T> (string topicName) where T : struct
 	{
-		await semaphoreSlim.WaitAsync ();
+		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
 		try {
 			// ensure that the channels does exist, if not, return false
 			if (!TryGetChannel<T> (topicName, out var topic, out _))
 				return false;
 
 			// remove the channel, removing will call dispose
-			await topic.RemoveChannel<T> ();
+			await topic.RemoveChannel<T> ().ConfigureAwait (false);
 			// clean the topic if needed
 			if (topic.ChannelCount == 0) {
 				topics.Remove (topicName);

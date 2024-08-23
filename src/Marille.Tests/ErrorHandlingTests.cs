@@ -1,3 +1,5 @@
+using Marille.Tests.Workers;
+
 namespace Marille.Tests;
 
 public class ErrorHandlingTests : IDisposable {
@@ -40,7 +42,7 @@ public class ErrorHandlingTests : IDisposable {
 		// assert the id of the message and the exception
 		Assert.Equal ("2", _errorWorker.ConsumedMessages[0].Message.Id);
 		Assert.Equal (typeof(InvalidOperationException), 
-			_errorWorker.ConsumedMessages[0].Exception.InnerException!.GetType ());
+			_errorWorker.ConsumedMessages[0].Exception.GetType ());
 	}
 	
 	[Fact]
@@ -76,6 +78,6 @@ public class ErrorHandlingTests : IDisposable {
 		// assert the id of the message and the exception
 		Assert.Equal ("2", messageId);
 		Assert.Equal (typeof(InvalidOperationException), 
-			exception?.InnerException!.GetType ());
+			exception!.GetType ());
 	}
 }

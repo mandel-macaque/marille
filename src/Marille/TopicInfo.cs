@@ -66,7 +66,7 @@ internal record TopicInfo<T> (TopicConfiguration Configuration, Channel<Message<
 	{
 		Channel.Writer.TryComplete ();
 		if (ConsumerTask is not null) 
-			await ConsumerTask;
+			await ConsumerTask.ConfigureAwait (false);
 	}
 
 	#region IDisposable Support
