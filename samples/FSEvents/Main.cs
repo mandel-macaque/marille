@@ -54,13 +54,20 @@ static class MainClass {
 		// done in a background thread else we will be blocked.
 		Task.Run (async () => {
 			// workers will be disposed by the hub
-			var worker = new ConsoleWriteLineWorker ();
-			var fileWorker = new LogFileWorker ("/Users/mandel/Desktop/marille.log");
-			var errorWorker = new ErrorWorker ();
-			var config = new TopicConfiguration {
+			//var worker = new LogEventToConsole ();
+			var fileWorker = new LogEventToFile ("/Users/mandel/Desktop/marille.log");
+			var eventFilter = new EventFilterer (_hub);
+			var fsEventsErrorHandler = new FSEventsErrorHandler ();
+			var textfileErrorHandler = new TextFileChangedErrorHandler ();
+			var diffGenerator = new DiffGenerator ();
+			var fsEventsConfig = new TopicConfiguration {
 				Mode = ChannelDeliveryMode.AtLeastOnceSync
 			};
-			await _hub.CreateAsync (nameof (FSMonitor), config, errorWorker, worker, fileWorker);
+			var txtEventsConfig = new TopicConfiguration {
+				Mode = ChannelDeliveryMode.AtMostOnceAsync
+			};
+			await _hub.CreateAsync (nameof (FSMonitor), txtEventsConfig, textfileErrorHandler, diffGenerator);
+			await _hub.CreateAsync (nameof (FSMonitor), fsEventsConfig, fsEventsErrorHandler, fileWorker, eventFilter);
 			Console.WriteLine ("Channel created");
 		});
 		var monitor = new FSMonitor ("/Users/mandel/Xamarin", _hub, FSEventStreamCreateFlags.FileEvents | FSEventStreamCreateFlags.WatchRoot);

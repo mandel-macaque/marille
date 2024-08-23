@@ -5,13 +5,13 @@ namespace Marille.Workers;
 /// <summary>
 /// Worker that will write into the console the different events that are happening.
 /// </summary>
-public class ConsoleWriteLineWorker : IWorker<FSEvent> {
+public class LogEventToConsole : IWorker<FSEvent> {
 
 	public bool UseBackgroundThread => false;
 
 	public Task ConsumeAsync (FSEvent message, CancellationToken token = default)
 	{
-		Console.WriteLine($"ConsoleWriteLineWorker: Got event {message}");
+		Console.WriteLine($"LogEventToConsole: Got event {message}");
 		return Task.CompletedTask;
 	}
 

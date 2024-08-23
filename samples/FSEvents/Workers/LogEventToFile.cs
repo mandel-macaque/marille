@@ -13,7 +13,7 @@ namespace Marille.Workers;
 /// semantic is a TERRIBLE idea.
 /// 
 /// </summary>
-public sealed class LogFileWorker (string filePath) : IWorker<FSEvent> {
+public sealed class LogEventToFile (string filePath) : IWorker<FSEvent> {
 
 	readonly StreamWriter _fileWriter = new (filePath);
 
@@ -21,7 +21,7 @@ public sealed class LogFileWorker (string filePath) : IWorker<FSEvent> {
 
 	public async Task ConsumeAsync (FSEvent message, CancellationToken token = default)
 	{
-		await _fileWriter.WriteLineAsync  ($"LogFileWorker: {message}");
+		await _fileWriter.WriteLineAsync  ($"LogEventToFile: {message}");
 		await _fileWriter.FlushAsync (token);
 	}
 
