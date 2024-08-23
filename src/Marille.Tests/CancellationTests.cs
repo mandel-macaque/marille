@@ -49,7 +49,7 @@ public class CancellationTests : IDisposable {
 		await _hub.RegisterAsync (topic, worker);
 		// send several events, they will be blocked until the worker is ready to consume them
 		for (var i = 0; i < eventCount; i++) {
-			await _hub.Publish (topic, new WorkQueuesEvent($"myID{i}"));
+			await _hub.PublishAsync (topic, new WorkQueuesEvent($"myID{i}"));
 		}
 		tcs.SetResult (true);
 		// publish no messages, just close the worker
@@ -76,8 +76,8 @@ public class CancellationTests : IDisposable {
 		await _hub.RegisterAsync (topic2, worker2);
 		
 		for (var i = 0; i < eventCount; i++) {
-			await _hub.Publish (topic1, new WorkQueuesEvent($"myID{i}"));
-			await _hub.Publish (topic2, new WorkQueuesEvent($"myID{i}"));
+			await _hub.PublishAsync (topic1, new WorkQueuesEvent($"myID{i}"));
+			await _hub.PublishAsync (topic2, new WorkQueuesEvent($"myID{i}"));
 		}
 		
 		tcs1.SetResult (true);
@@ -191,8 +191,8 @@ public class CancellationTests : IDisposable {
 		await _hub.RegisterAsync (topic2, worker2);
 		
 		for (var index = 0; index < eventCount; index++) {
-			await _hub.Publish (topic1, new WorkQueuesEvent($"myID{index}"));
-			await _hub.Publish (topic2, new WorkQueuesEvent($"myID{index}"));
+			await _hub.PublishAsync (topic1, new WorkQueuesEvent($"myID{index}"));
+			await _hub.PublishAsync (topic2, new WorkQueuesEvent($"myID{index}"));
 		}
 		
 		// we are blocking the consume of the channels

@@ -31,9 +31,9 @@ public class ErrorHandlingTests : IDisposable {
 		var worker = new FastWorker ("worker1", workerTcs);
 		await _hub.CreateAsync (topic, _configuration, _errorWorker, worker);
 		// we will post 3 events, one of them will throw an exception
-		await _hub.Publish (topic, new WorkQueuesEvent ("1"));
-		await _hub.Publish (topic, new WorkQueuesEvent ("2", true));
-		await _hub.Publish (topic, new WorkQueuesEvent ("3"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"));
 		// await for the error worker to consume the events
 		await _errorWorkerTcs.Task;
 		Assert.Equal (1, _errorWorker.ConsumedCount);
@@ -67,9 +67,9 @@ public class ErrorHandlingTests : IDisposable {
 		};
 		await _hub.CreateAsync (topic, _configuration, errorAction, workerAction);
 		// we will post 3 events, one of them will throw an exception
-		await _hub.Publish (topic, new WorkQueuesEvent ("1"));
-		await _hub.Publish (topic, new WorkQueuesEvent ("2", true));
-		await _hub.Publish (topic, new WorkQueuesEvent ("3"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"));
 		// await for the error worker to consume the events
 		await tcs.Task;
 		Assert.Equal (1, consumedCount);
