@@ -17,6 +17,8 @@ public sealed class LogFileWorker (string filePath) : IWorker<FSEvent> {
 
 	readonly StreamWriter _fileWriter = new (filePath);
 
+	public bool UseBackgroundThread => false;
+
 	public async Task ConsumeAsync (FSEvent message, CancellationToken token = default)
 	{
 		await _fileWriter.WriteLineAsync  ($"LogFileWorker: {message}");
