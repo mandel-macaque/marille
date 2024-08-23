@@ -26,11 +26,11 @@ public class EventFilterer(Hub hub) : IWorker<FSEvent> {
 		// we will use that to decide what to do. Else we will use the file command to decide what to do.
 		try {
 			var mime = MimeGuesser.GuessFileType (message.Path);
-			if (mime.MimeType.StartsWith ("text/")) {
-				await _hub.PublishAsync (nameof (FSMonitor), new TextFileChangedEvent (message));
-			} else {
-				Console.WriteLine ($"Unknown file type: {mime.MimeType} for path {message.Path}");
-			}
+			await (mime.MimeType switch {
+				"application/json" => _hub.PublishAsync (nameof (FSMonitor), new TextFileChangedEvent (message)),
+				var str when str.StartsWith("text/") => _hub.PublishAsync (nameof (FSMonitor), new TextFileChangedEvent (message)),
+				_ => ValueTask.CompletedTask,
+			});
 		} catch (Exception ex) {
 			Console.WriteLine ($"Error while guessing the mime type for {message.Path}: {ex.Message}");
 		}
