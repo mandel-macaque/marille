@@ -5,8 +5,8 @@ namespace Marille;
 sealed class FSMonitor : FSEventStream {
 	readonly Hub _hub;
 
-	public FSMonitor (string rootPath, Hub hub, FSEventStreamCreateFlags createFlags)
-		: base (new [] { rootPath }, TimeSpan.Zero, createFlags)
+	public FSMonitor (List<string> rootPaths, Hub hub, FSEventStreamCreateFlags createFlags)
+		: base (rootPaths.ToArray (), TimeSpan.Zero, createFlags)
 	{
 		// keep a reference to the hub so that we can post the messages to it
 		_hub = hub;

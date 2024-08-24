@@ -5,20 +5,58 @@ using CoreServices;
 using ObjCRuntime;
 
 using Marille.Workers;
+using Mono.Options;
 using Serilog;
 
 namespace Marille;
 
 static class MainClass {
+	#region Fields
+
+	public static int Verbosity { get; set; } = 1;
+	public static bool ShowHelp { get; set; } = false;
+	
+	public static List<string> Paths { get; } = new ();
+	
+	#endregion
 
 	#region Helpers
+	
+	static void PrintHelp (OptionSet options)
+	{
+		Console.WriteLine ("Usage: fsevents [OPTIONS]+ message");
+		Console.WriteLine ("Example of a file system watcher using Marille.");
+		Console.WriteLine ();
+		Console.WriteLine ("Options:");
+		options.WriteOptionDescriptions (Console.Out);
+	}
+	
 	static void InitializeLog ()
 	{
 		LoggerConfiguration logConfiguration = new LoggerConfiguration ()
 			.Enrich.WithThreadId ()
 			.Enrich.WithThreadName ();
-
-		logConfiguration.MinimumLevel.Debug ();
+		
+		// cast verbosity to a log level and set it as the minimum level
+		var minLevel = (LogLevel) Verbosity;
+		
+		switch (minLevel) {
+		case LogLevel.Fatal:
+			logConfiguration.MinimumLevel.Fatal ();
+			break;
+		case LogLevel.Error:
+			logConfiguration.MinimumLevel.Error ();
+			break;
+		case LogLevel.Information:
+			logConfiguration.MinimumLevel.Information ();
+			break;
+		case LogLevel.Debug:
+			logConfiguration.MinimumLevel.Debug ();
+			break;
+		default:
+			logConfiguration.MinimumLevel.Information ();
+			break;
+		}
 
 		// thread id == min level of log
 		Log.Logger = logConfiguration
@@ -62,8 +100,33 @@ static class MainClass {
 
 	static int Main2 (string [] args)
 	{
+		// Use mono.options to parse the args, this is a sample so we won't do too complex things
+		var os = new OptionSet () {
+			{ "h|?|help", "Displays the help", v => ShowHelp = v != null },
+			{ "v", "Verbose", v => Verbosity++ },
+			{ "q", "Quiet", v => Verbosity = 0 },
+			{ "p|path=", "Add a path to monitor", v => Paths.Add (v) },
+		};
+		
+		try {
+			var extra = os.Parse (args);
+		} catch (Exception e) {
+			// We could not parse the argumets, print the error and suggest to call help
+			Console.WriteLine("fsevents:");
+			Console.WriteLine (e.Message);
+			Console.WriteLine ("Try `fsevents --help' for more information.");
+			return 1;
+		}
+
+		if (ShowHelp) {
+			PrintHelp (os);
+			return 0;
+		}
+
 		// Add logging so that we can see what is going on
 		InitializeLog ();
+		
+		Log.Information ("Starting fsevents with {Paths}", Paths);
 
 		// we need to create several things to be able to get the events:
 		// 1. Hub: will be used to deliver the events to the consumers.
@@ -80,7 +143,7 @@ static class MainClass {
 			var diffGenerator = new DiffGenerator ();
 			
 			var fsEventsErrorHandler = new FSEventsErrorHandler ();
-			var textfileErrorHandler = new TextFileChangedErrorHandler ();
+			var textFileChangedErrorHandler = new TextFileChangedErrorHandler ();
 			
 			var fsEventsConfig = new TopicConfiguration {
 				Mode = ChannelDeliveryMode.AtLeastOnceSync
@@ -88,15 +151,16 @@ static class MainClass {
 			var txtEventsConfig = new TopicConfiguration {
 				Mode = ChannelDeliveryMode.AtMostOnceAsync
 			};
-			await _hub.CreateAsync (nameof (FSMonitor), txtEventsConfig, textfileErrorHandler, diffGenerator);
+			await _hub.CreateAsync (nameof (FSMonitor), txtEventsConfig, textFileChangedErrorHandler, diffGenerator);
 			await _hub.CreateAsync (nameof (FSMonitor), fsEventsConfig, fsEventsErrorHandler, eventFilter);
-			Console.WriteLine ("Channel created");
+			Log.Information ("Channels created");
 		});
 
-		var monitor = new FSMonitor ("/Users/mandel/Xamarin", _hub, FSEventStreamCreateFlags.FileEvents | FSEventStreamCreateFlags.WatchRoot);
+		var monitor = new FSMonitor (Paths, _hub, FSEventStreamCreateFlags.FileEvents | FSEventStreamCreateFlags.WatchRoot);
 		monitor.ScheduleWithRunLoop (NSRunLoop.Current);
-		Console.WriteLine ("FSEvent monitor scheduled");
+		Log.Information ("FSEvent monitor scheduled");
 		monitor.Start ();
+		Console.WriteLine($"Starting watch on {string.Join (',', Paths)}");
 		NSRunLoop.Main.Run ();
 
 		return 0;
