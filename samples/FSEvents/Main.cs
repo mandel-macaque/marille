@@ -7,6 +7,7 @@ using ObjCRuntime;
 using Marille.Workers;
 using Mono.Options;
 using Serilog;
+using UuidExtensions;
 
 namespace Marille;
 
@@ -57,6 +58,8 @@ static class MainClass {
 			logConfiguration.MinimumLevel.Information ();
 			break;
 		}
+		
+		logConfiguration.MinimumLevel.Debug ();
 
 		// thread id == min level of log
 		Log.Logger = logConfiguration
@@ -126,21 +129,30 @@ static class MainClass {
 		// Add logging so that we can see what is going on
 		InitializeLog ();
 		
+		// create the app data dir in which we will store the diffs
+		var baseDir = Path.Combine (Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData), "Marille", "Diffs");
+		Directory.CreateDirectory (baseDir);
+		Log.Information ("Created base directory {BaseDir}", baseDir);
+		
+		// we are going to create a uuid7 for the new snapshot. uuid7 is time shortable and unique so that way
+		// we will be able to read see the snapshot and the diff in the future.
+		var snapshot = SnapshotManager.Create (baseDir, Paths);
+
 		Log.Information ("Starting fsevents with {Paths}", Paths);
 
 		// we need to create several things to be able to get the events:
 		// 1. Hub: will be used to deliver the events to the consumers.
 		// 2. Worker: will be used to process the events.
 		// 3. FSMonitor: will be used to monitor the file system and deliver the events to the hub.
-		using var _hub = new Hub ();
+		var hub = new Hub ();
 		
 		// because we are going to start a main loop in the main thread, we need the channel initialization to be
 		// done in a background thread else we will be blocked.
 		Task.Run (async () => {
 			// workers will be disposed by the hub
 			//var worker = new LogEventToConsole ();
-			var eventFilter = new EventFilterer (_hub);
-			var diffGenerator = new DiffGenerator ();
+			var eventFilter = new EventFilterer (hub);
+			var diffGenerator = new DiffGenerator (snapshot);
 			
 			var fsEventsErrorHandler = new FSEventsErrorHandler ();
 			var textFileChangedErrorHandler = new TextFileChangedErrorHandler ();
@@ -151,12 +163,14 @@ static class MainClass {
 			var txtEventsConfig = new TopicConfiguration {
 				Mode = ChannelDeliveryMode.AtMostOnceAsync
 			};
-			await _hub.CreateAsync (nameof (FSMonitor), txtEventsConfig, textFileChangedErrorHandler, diffGenerator);
-			await _hub.CreateAsync (nameof (FSMonitor), fsEventsConfig, fsEventsErrorHandler, eventFilter);
+			await hub.CreateAsync (nameof (FSMonitor), txtEventsConfig, textFileChangedErrorHandler, diffGenerator);
+			await hub.CreateAsync (nameof (FSMonitor), fsEventsConfig, fsEventsErrorHandler, eventFilter);
 			Log.Information ("Channels created");
+			Console.WriteLine ("Feel free to edit your files, we will keep a history of the edits in the session!!!");
+			Console.WriteLine ("Press Ctrl+C to stop the watcher.");
 		});
 
-		var monitor = new FSMonitor (Paths, _hub, FSEventStreamCreateFlags.FileEvents | FSEventStreamCreateFlags.WatchRoot);
+		var monitor = new FSMonitor (Paths, hub, FSEventStreamCreateFlags.FileEvents | FSEventStreamCreateFlags.WatchRoot);
 		monitor.ScheduleWithRunLoop (NSRunLoop.Current);
 		Log.Information ("FSEvent monitor scheduled");
 		monitor.Start ();
