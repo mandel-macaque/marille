@@ -30,6 +30,8 @@ public class FastWorker : IWorker<WorkQueuesEvent> {
 			Task.FromException (new InvalidOperationException($"Message with Id {message.Id} is an error")) :
 			Task.FromResult (Completion.TrySetResult(true));
 
+	public Task OnChannelClosedAsync (string channelName, CancellationToken token = default) => Task.CompletedTask; 
+
 	public void Dispose () { }
 
 	public ValueTask DisposeAsync () => ValueTask.CompletedTask;

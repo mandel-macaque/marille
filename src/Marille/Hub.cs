@@ -96,7 +96,7 @@ public class Hub : IHub {
 		return HandleConsumerError (task, channel, item); 
 	}
 
-	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
+	async Task ConsumeChannel<T> (string name, TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
 		IWorker<T>[] workersArray, TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken) where T : struct
 	{
 		// this is an important check, else the items will be consumer with no worker to receive them
@@ -151,6 +151,12 @@ public class Hub : IHub {
 				}
 			}
 		}
+		if (ch.Reader.Completion.IsCompleted) {
+			// notify all the workers that no more messages are going to happen
+			foreach (var worker in workersArray) {
+				await worker.OnChannelClosedAsync (name, cancellationToken).ConfigureAwait (false);
+			}
+		}
 	}
 
 	async Task<bool> StartConsuming<T> (TopicInfo<T> topicInfo)
@@ -172,8 +178,8 @@ public class Hub : IHub {
 		// we have no interest in awaiting for this task, but we want to make sure it started. To do so
 		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
 		var completionSource = new TaskCompletionSource<bool>();
-		topicInfo.ConsumerTask = ConsumeChannel (
-			topicInfo.Configuration, topicInfo.Channel, topicInfo.ErrorWorker, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
+		topicInfo.ConsumerTask = ConsumeChannel (topicInfo.TopicName, topicInfo.Configuration, topicInfo.Channel, 
+			topicInfo.ErrorWorker, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
 		// send a message with a ack so that we can ensure we are indeed running
 		_ = topicInfo.Channel.Writer.WriteAsync (new (MessageType.Ack), topicInfo.CancellationTokenSource.Token);
 		return await completionSource.Task.ConfigureAwait (false);

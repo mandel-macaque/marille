@@ -18,7 +18,9 @@ public class BackgroundThreadWorker : IWorker<WorkQueuesEvent> {
 		await Task.Delay (TimeSpan.FromMilliseconds (1000));
 		Completion.TrySetResult (true);
 	}
-	
+
+	public Task OnChannelClosedAsync (string channelName, CancellationToken token = default) => Task.CompletedTask; 
+
 	public void Dispose () { }
 
 	public ValueTask DisposeAsync () => ValueTask.CompletedTask;
