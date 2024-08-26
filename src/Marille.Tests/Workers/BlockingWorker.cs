@@ -7,7 +7,8 @@ namespace Marille.Tests;
 public class BlockingWorker (TaskCompletionSource<bool> readyToConsume) : IWorker<WorkQueuesEvent> {
 	int consumed = 0;
 	public int ConsumedCount => consumed;
-	public TaskCompletionSource<bool> ReadyToConsume { get; private set; } = readyToConsume;
+	public TaskCompletionSource<bool> ReadyToConsume { get; } = readyToConsume;
+	public TaskCompletionSource<bool> OnChannelClose { get; } = new ();
 
 	public bool UseBackgroundThread => false;
 	public async Task ConsumeAsync (WorkQueuesEvent message, CancellationToken token = default)
@@ -16,6 +17,12 @@ public class BlockingWorker (TaskCompletionSource<bool> readyToConsume) : IWorke
 		await ReadyToConsume.Task;
 		// increase the count in a thread safe way
 		Interlocked.Increment(ref consumed);
+	}
+
+	public Task OnChannelClosedAsync (string channelName, CancellationToken token = default)
+	{
+		OnChannelClose.TrySetResult (true);
+		return Task.CompletedTask;
 	}
 
 	public void Dispose () { }

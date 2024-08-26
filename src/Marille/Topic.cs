@@ -32,7 +32,7 @@ internal class Topic (string name) : IDisposable, IAsyncDisposable {
 			var ch = (configuration.Capacity is null) ? 
 				Channel.CreateUnbounded<Message<T>> () : 
 				Channel.CreateBounded<Message<T>> (configuration.Capacity.Value);
-			topicInfo = new(configuration, ch, errorWorker, workers);
+			topicInfo = new(Name, configuration, ch, errorWorker, workers);
 			channels[type] = topicInfo;
 			return true;
 		}
