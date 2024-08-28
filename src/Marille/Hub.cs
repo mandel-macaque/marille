@@ -296,6 +296,12 @@ public class Hub : IHub {
 		}
 	}
 
+	public async ValueTask PublishAsync<T> (string topicName, T? publishedEvent) where T : struct
+	{
+		if (publishedEvent is not null)
+			await PublishAsync (topicName, publishedEvent.Value);
+	}
+
 	public bool TryPublish<T> (string topicName, T publishedEvent) where T : struct
 	{
 		semaphoreSlim.Wait ();
@@ -308,6 +314,12 @@ public class Hub : IHub {
 		} finally {
 			semaphoreSlim.Release ();
 		}
+	}
+
+	public bool TryPublish<T> (string topicName, T? publishedEvent) where T : struct
+	{
+		return publishedEvent is not null
+		       && TryPublish (topicName, publishedEvent.Value);
 	}
 
 	public async Task CloseAllAsync ()
