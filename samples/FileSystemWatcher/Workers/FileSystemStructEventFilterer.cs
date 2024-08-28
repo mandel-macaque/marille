@@ -1,4 +1,5 @@
 using Marille;
+using Marille.FileSystem.Events;
 using Marille.FileSystem.Workers;
 using Serilog;
 
@@ -18,20 +19,25 @@ public class FileSystemStructEventFilterer(Hub hub): EventFilterer<FileSystemEve
 		}
 
 		// decide what to do based on the type of change
-		var textFileChangedEvent =
-			TextFileChangedEventFactory.FromFileSystemEventStruct (currentMessage);
+		TextFileChangedEvent? textFileChangedEvent = default;
 
 		switch (currentMessage.ChangeType) {
 		case WatcherChangeTypes.Changed:
 		case WatcherChangeTypes.Created: {
-			// filter based of the type
-			if (textFileChangedEvent is not null)
-				await _hub.PublishAsync (nameof(FileSystemWatcher), textFileChangedEvent.Value);
+			if (IsValidMimeType (currentMessage.FullPath))
+				textFileChangedEvent = TextFileChangedEventFactory.FromFileSystemEventStruct (currentMessage);
 			break;
 		}
 		case WatcherChangeTypes.Deleted:
-			// always publish the event
+			textFileChangedEvent = TextFileChangedEventFactory.FromFileSystemEventStruct (currentMessage);
+			break;
+		case WatcherChangeTypes.Renamed:
+			if (currentMessage.DestinationFullPath is not null && IsValidMimeType (currentMessage.DestinationFullPath))
+				textFileChangedEvent = TextFileChangedEventFactory.FromFileSystemEventStruct (currentMessage);
+			break;
 		}
 
+		if (textFileChangedEvent is not null)
+			await _hub.PublishAsync (nameof(FileSystemWatcher), textFileChangedEvent.Value);
 	}
 }
