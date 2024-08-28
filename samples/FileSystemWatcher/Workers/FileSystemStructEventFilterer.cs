@@ -37,7 +37,8 @@ public class FileSystemStructEventFilterer(Hub hub): EventFilterer<FileSystemEve
 			break;
 		}
 
-		await _hub.PublishAsync (nameof(FileSystemWatcher), textFileChangedEvent.Value);
+		if (textFileChangedEvent is not null)
+			await _hub.PublishAsync (nameof(FileSystemWatcher), textFileChangedEvent.Value);
 	}
 
 	public override Task OnChannelClosedAsync (string channelName, CancellationToken token = default)
