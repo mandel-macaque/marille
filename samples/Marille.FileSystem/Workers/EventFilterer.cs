@@ -24,6 +24,7 @@ public abstract class EventFilterer<T> : IWorker<T> where T: struct {
 
 	public abstract bool UseBackgroundThread { get; }
 	public abstract Task ConsumeAsync (T currentMessage, CancellationToken token = default);
+	public abstract Task OnChannelClosedAsync (string channelName, CancellationToken token = default);
 
 	#endregion
 

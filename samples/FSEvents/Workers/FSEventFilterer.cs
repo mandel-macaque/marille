@@ -37,9 +37,65 @@ public class FSEventFilterer(Hub hub) : EventFilterer<FSEvent> {
 		}
 	}
 	
-	Task PumpEvents ()
+	async Task PumpEvents ()
 	{
-		return Task.CompletedTask;
+		Log.Debug ("Processing previous events");
+		var textFileEvents = new Stack<TextFileChangedEvent> ();
+		while (_previous.Count > 0) {
+			var currentEvent = _previous[^1];
+			_previous.RemoveAt (_previous.Count - 1);
+			Log.Debug ("Processing event {Event}", currentEvent);
+			// look at the current event, if it is not a rename, just create a new text file changed event and
+			// add it to the stack, if it is a change event look at the previous event to see what needs to be
+			// done.
+			if (currentEvent.Flags.HasFlag (FSEventStreamEventFlags.ItemRenamed)) {
+				Log.Debug ("Found rename event {Event}", currentEvent);
+				// we have a rename events, this means several things can happen:
+				// 1. we have a completed rename. That happens when the current event and the previous event have
+				//    consecutive ids. We can create a rename event and process it.
+				// 2. we have a rename followed by a rename. That means that the previous rename is completed and we
+				//    can create an event based on the stat of the file.
+				if (_previous.Count >= 1) { // we did remove the current event from the list, so we have to look for 1, not 2
+					Log.Debug ("Found enough events to process a rename {Count}", _previous.Count);
+					var previousEvent = _previous[^1];
+					_previous.RemoveAt (_previous.Count - 1);
+					Log.Debug ("Previous event is {Event}", previousEvent);
+					if (currentEvent.Id - 1 == previousEvent.Id) { // remember we removed the current one from the list
+						// we have a completed rename
+						textFileEvents.Push (TextFileChangedEventFactory.FromFSEvent (previousEvent, currentEvent));
+					} else {
+						// no matching events, generate two fake events based on the stat, add the current one and
+						// then the previous since we are in a stack
+						var previousStat = new FileInfo (previousEvent.Path!);
+						textFileEvents.Push (previousStat.Exists
+							? new (previousEvent.Path!, TextFileChangedType.ItemCreated)
+							: new (previousEvent.Path!, TextFileChangedType.ItemRemoved));
+						var currentStat = new FileInfo (currentEvent.Path!);
+						textFileEvents.Push (currentStat.Exists
+							? new (currentEvent.Path!, TextFileChangedType.ItemCreated)
+							: new (currentEvent.Path!, TextFileChangedType.ItemRemoved));
+					}
+				} else {
+					// we do not have more events and we have a rename, that means that we have a completed yet
+					// mismatched rename. We create a new fake event based on the stat of the file.
+					var stat = new FileInfo (currentEvent.Path!);
+					textFileEvents.Push (stat.Exists
+						? new(currentEvent.Path!, TextFileChangedType.ItemCreated)
+						: new(currentEvent.Path!, TextFileChangedType.ItemRemoved));
+				}
+			} else {
+				Log.Debug ("Adding event to the stack {Event}", currentEvent);
+				// add to the stack a new event
+				var textFileChangedEvent = TextFileChangedEventFactory.FromFSEvent (currentEvent);
+				if (textFileChangedEvent is not null)
+					textFileEvents.Push (textFileChangedEvent.Value);
+			}
+		}
+		Log.Debug ("Generated {Count} events to be processed", textFileEvents.Count);
+		// pump the events to the hub
+		while (textFileEvents.TryPop (out var textFileChangedEvent)) {
+			await FilterEvent (textFileChangedEvent);
+		}
 	}
 
 	public override async Task ConsumeAsync (FSEvent currentMessage, CancellationToken token = default)
@@ -101,64 +157,8 @@ public class FSEventFilterer(Hub hub) : EventFilterer<FSEvent> {
 
 			// at this point we do know that either do not have a rename event OR we have a rename event with consecutive ids
 			_previous.Add (currentMessage);
+			await PumpEvents ();
 
-			Log.Debug ("Processing previous events");
-			var textFileEvents = new Stack<TextFileChangedEvent> ();
-			while (_previous.Count > 0) {
-				var currentEvent = _previous[^1];
-				_previous.RemoveAt (_previous.Count - 1);
-				Log.Debug ("Processing event {Event}", currentEvent);
-				// look at the current event, if it is not a rename, just create a new text file changed event and
-				// add it to the stack, if it is a change event look at the previous event to see what needs to be 
-				// done.
-				if (currentEvent.Flags.HasFlag (FSEventStreamEventFlags.ItemRenamed)) {
-					Log.Debug ("Found rename event {Event}", currentEvent);
-					// we have a rename events, this means several things can happen:
-					// 1. we have a completed rename. That happens when the current event and the previous event have
-					//    consecutive ids. We can create a rename event and process it.
-					// 2. we have a rename followed by a rename. That means that the previous rename is completed and we
-					//    can create an event based on the stat of the file. 
-					if (_previous.Count >= 1) { // we did remove the current event from the list, so we have to look for 1, not 2
-						Log.Debug ("Found enough events to process a rename {Count}", _previous.Count);
-						var previousEvent = _previous[^1]; 
-						_previous.RemoveAt (_previous.Count - 1);
-						Log.Debug ("Previous event is {Event}", previousEvent);
-						if (currentEvent.Id - 1 == previousEvent.Id) { // remember we removed the current one from the list
-							// we have a completed rename
-							textFileEvents.Push (TextFileChangedEventFactory.FromFSEvent (previousEvent, currentEvent));
-						} else { 
-							// no matching events, generate two fake events based on the stat, add the current one and
-							// then the previous since we are in a stack
-							var previousStat = new FileInfo (previousEvent.Path!);
-							textFileEvents.Push (previousStat.Exists
-								? new (previousEvent.Path!, TextFileChangedType.ItemCreated)
-								: new (previousEvent.Path!, TextFileChangedType.ItemRemoved));
-							var currentStat = new FileInfo (currentEvent.Path!);
-							textFileEvents.Push (currentStat.Exists
-								? new (currentEvent.Path!, TextFileChangedType.ItemCreated)
-								: new (currentEvent.Path!, TextFileChangedType.ItemRemoved));
-						}
-					} else {
-						// we do not have more events and we have a rename, that means that we have a completed yet
-						// mismatched rename. We create a new fake event based on the stat of the file.
-						var stat = new FileInfo (currentEvent.Path!);
-						textFileEvents.Push (stat.Exists
-							? new(currentEvent.Path!, TextFileChangedType.ItemCreated)
-							: new(currentEvent.Path!, TextFileChangedType.ItemRemoved));
-					}
-				} else {
-					Log.Debug ("Adding event to the stack {Event}", currentEvent);
-					// add to the stack a new event
-					var textFileChangedEvent = TextFileChangedEventFactory.FromFSEvent (currentEvent);
-					if (textFileChangedEvent is not null)
-						textFileEvents.Push (textFileChangedEvent.Value);
-				}
-			}
-			Log.Debug ("Generated {Count} events to be processed", textFileEvents.Count);
-			// pump the events to the hub
-			while (textFileEvents.TryPop (out var textFileChangedEvent)) {
-				await FilterEvent (textFileChangedEvent);
-			}
 		} else {
 			if (currentMessage.Flags.HasFlag (FSEventStreamEventFlags.ItemRenamed)) {
 				Log.Debug ("Adding event {Event} to the end of the list", currentMessage);
@@ -174,4 +174,8 @@ public class FSEventFilterer(Hub hub) : EventFilterer<FSEvent> {
 		}
 	}
 
+	public override async Task OnChannelClosedAsync (string channelName, CancellationToken token = default)
+	{
+		await PumpEvents ();
+	}
 }

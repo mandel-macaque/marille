@@ -145,6 +145,8 @@ public class DiffGenerator (Snapshot snapshot) : IWorker<TextFileChangedEvent> {
 		await task;
 	}
 
+	public Task OnChannelClosedAsync (string channelName, CancellationToken token = default) => Task.CompletedTask;
+
 	public void Dispose () { }
 
 	public ValueTask DisposeAsync () => ValueTask.CompletedTask;
