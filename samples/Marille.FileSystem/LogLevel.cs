@@ -1,4 +1,4 @@
-namespace Marille;
+namespace Marille.FileSystem;
 
 public enum LogLevel {
 	Fatal = 0,
@@ -6,4 +6,3 @@ public enum LogLevel {
 	Information,
 	Debug
 }
-

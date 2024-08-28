@@ -1,6 +1,7 @@
 using CoreServices;
+using Marille;
 
-namespace Marille;
+namespace FSEvents;
 
 sealed class FSMonitor : FSEventStream {
 	readonly Hub _hub;

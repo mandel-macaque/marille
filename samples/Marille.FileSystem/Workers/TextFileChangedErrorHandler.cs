@@ -1,6 +1,7 @@
+using Marille.FileSystem.Events;
 using Serilog;
 
-namespace Marille.Workers;
+namespace Marille.FileSystem.Workers;
 
 public class TextFileChangedErrorHandler : IErrorWorker<TextFileChangedEvent> {
 	public bool UseBackgroundThread => false;
