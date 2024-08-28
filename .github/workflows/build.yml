@@ -14,6 +14,7 @@ on:
 
 jobs:
   build:
+    name: Build library
 
     runs-on: ubuntu-latest
 
@@ -44,3 +45,50 @@ jobs:
         path: TestResults
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
+
+  build-samples:
+    name: Build Samples
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore samples.sln
+      working-directory: ./samples
+
+    - name: Build
+      run: dotnet build --no-restore samples.sln
+      working-directory: ./samples
+
+  build-samples-osx:
+    name: Build OS X Samples
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restore workloads
+      run: sudo dotnet workload restore samples-osx.sln
+      working-directory: ./samples
+
+    - name: Restore dependencies
+      run: dotnet restore samples-osx.sln
+      working-directory: ./samples
+
+
+    - name: Build
+      run: dotnet build --no-restore samples-osx.sln
+      working-directory: ./samples
