@@ -134,7 +134,19 @@ public interface IHub : IDisposable, IAsyncDisposable {
 	/// <exception cref="InvalidOperationException">Thrown if no topic can be found with the provided
 	/// (topicName, messageType) combination.</exception>
 	public ValueTask PublishAsync<T> (string topicName, T publishedEvent) where T : struct;
-	
+
+	/// <summary>
+	/// Allows to publish a message in a given topic. The message will be added to a channel and will be
+	/// consumed by any worker that might have been added.
+	/// </summary>
+	/// <param name="topicName">The topic name that will deliver messages to the worker.</param>
+	/// <param name="publishedEvent">The message to be publish in the topic.</param>
+	/// <typeparam name="T">The type of messages of the topic.</typeparam>
+	/// <returns>true of the message was delivered to the topic.</returns>
+	/// <exception cref="InvalidOperationException">Thrown if no topic can be found with the provided
+	/// (topicName, messageType) combination.</exception>
+	public ValueTask PublishAsync<T> (string topicName, T? publishedEvent) where T : struct;
+
 	/// <summary>
 	/// Allows to publish a message in the given topic. The method will fail on bounded channels depending on the
 	/// semantics that were used to create the channel.
@@ -147,7 +159,20 @@ public interface IHub : IDisposable, IAsyncDisposable {
 	/// (topicName, messageType) combination.</exception>
 	/// <returns>true if the event could be publish.</returns>
 	public bool TryPublish<T> (string topicName, T publishedEvent) where T : struct;
-	
+
+	/// <summary>
+	/// Allows to publish a message in the given topic. The method will fail on bounded channels depending on the
+	/// semantics that were used to create the channel.
+	/// </summary>
+	/// <param name="topicName">The topic name that will deliver messages to the worker.</param>
+	/// <param name="publishedEvent">The message to be publish in the topic.</param>
+	/// <typeparam name="T">The type of messages of the topic.</typeparam>
+	/// <returns>true of the message was delivered to the topic.</returns>
+	/// <exception cref="InvalidOperationException">Thrown if no topic can be found with the provided
+	/// (topicName, messageType) combination.</exception>
+	/// <returns>true if the event could be publish.</returns>
+	public bool TryPublish<T> (string topicName, T? publishedEvent) where T : struct;
+
 	/// <summary>
 	/// Cancel all channels in the Hub and return a task that will be completed once all the channels have been flushed.
 	/// </summary>
