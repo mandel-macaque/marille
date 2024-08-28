@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="DiffMatchPatch" Version="3.0.0" />
+      <PackageReference Include="Mime" Version="3.6.0" />
+      <PackageReference Include="Serilog" Version="4.0.2-dev-02226" />
+      <PackageReference Include="UuidExtensions" Version="1.2.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\src\Marille\Marille.csproj" />
+    </ItemGroup>
+
+</Project>

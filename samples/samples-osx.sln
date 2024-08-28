@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FSEvents", "FSEvents\FSEvents.csproj", "{7BE6ED24-16AB-4205-AE54-B1073BEF77E4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Marille", "..\src\Marille\Marille.csproj", "{BC2D62A2-6F2C-495B-95A6-4920D7C01EEF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Marille.FileSystem", "Marille.FileSystem\Marille.FileSystem.csproj", "{CFEC7D85-2E29-49F8-9A3C-BCBD4CA331C1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7BE6ED24-16AB-4205-AE54-B1073BEF77E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7BE6ED24-16AB-4205-AE54-B1073BEF77E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7BE6ED24-16AB-4205-AE54-B1073BEF77E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7BE6ED24-16AB-4205-AE54-B1073BEF77E4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BC2D62A2-6F2C-495B-95A6-4920D7C01EEF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC2D62A2-6F2C-495B-95A6-4920D7C01EEF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC2D62A2-6F2C-495B-95A6-4920D7C01EEF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC2D62A2-6F2C-495B-95A6-4920D7C01EEF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CFEC7D85-2E29-49F8-9A3C-BCBD4CA331C1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CFEC7D85-2E29-49F8-9A3C-BCBD4CA331C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CFEC7D85-2E29-49F8-9A3C-BCBD4CA331C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CFEC7D85-2E29-49F8-9A3C-BCBD4CA331C1}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
