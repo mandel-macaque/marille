@@ -80,4 +80,42 @@ public class ErrorHandlingTests : IDisposable {
 		Assert.Equal (typeof(InvalidOperationException), 
 			exception!.GetType ());
 	}
+
+	[Fact]
+	public async Task FaultyErrorWorker ()
+	{
+		// make sure that we do know how to deal with a situation in which we have a faulty error worker that
+		// throws an exception
+		
+		var topic = nameof(ErrorLambdaConsumeAsync);
+		int consumedCount = 0;
+		var messageId = string.Empty;
+		var tcs = new TaskCompletionSource<bool> ();
+		Func<WorkQueuesEvent, Exception, CancellationToken, Task> errorAction = (_, _, _) => {
+			// Terrible idea, but users make mistakes
+			throw new InvalidOperationException($"Bad error worker");
+		};
+		Func<WorkQueuesEvent, CancellationToken, Task> workerAction = (message, _) => {
+			Interlocked.Increment (ref consumedCount);
+			if (message.IsError) {
+				messageId = message.Id;
+				throw new InvalidOperationException ($"Error message with id {message.Id}");
+			}
+
+			if (consumedCount == 3)
+				tcs.TrySetResult (true);
+			return Task.CompletedTask;
+		};
+		await _hub.CreateAsync (topic, _configuration, errorAction, workerAction);
+		// we will post 3 events, one of them will throw an exception, if we did not crash the consuming
+		// thread, we we should be able to consume all the events
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"));
+		// await for the error worker to consume the events
+		await tcs.Task;
+		Assert.Equal (3, consumedCount);
+		// assert the id of the message and the exception
+		Assert.Equal ("2", messageId);
+	}
 }

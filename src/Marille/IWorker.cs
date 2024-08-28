@@ -18,6 +18,14 @@ public interface IWorker<in T> : IDisposable, IAsyncDisposable where T :  struct
 	/// </summary>
 	/// <param name="message">The messages from the channel assigned to be processed by the worker instance.</param>
 	/// <param name="token">Calculation toke provided to the worker. This cancellation token should be respected.</param>
-	/// <returns></returns>
+	/// <returns>The task to be awaited.</returns>
 	public Task ConsumeAsync (T message, CancellationToken token = default);
+
+	/// <summary>
+	/// Method to be executed when the channel has been closed. This allows the worker to perform any cleanup.
+	/// </summary>
+	/// <param name="channelName">The channel name that has been closed.</param>
+	/// <param name="token">Calculation toke provided to the worker. This cancellation token should be respected.</param>
+	/// <returns>The task to be awaited.</returns>
+	public Task OnChannelClosedAsync (string channelName, CancellationToken token = default);
 }

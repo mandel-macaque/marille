@@ -96,7 +96,7 @@ public class Hub : IHub {
 		return HandleConsumerError (task, channel, item); 
 	}
 
-	async Task ConsumeChannel<T> (TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
+	async Task ConsumeChannel<T> (string name, TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
 		IWorker<T>[] workersArray, TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken) where T : struct
 	{
 		// this is an important check, else the items will be consumer with no worker to receive them
@@ -114,15 +114,21 @@ public class Hub : IHub {
 				if (item.Type == MessageType.Ack) 
 					continue;
 				if (item.IsError) {
-					// do wait for the error worker to finish, we do not want to lose any error
-					if (errorWorker.UseBackgroundThread)
-						await Task.Run (async () => {
+					// do wait for the error worker to finish, we do not want to lose any error. We are going to wrap
+					// the error task in a try/catch to make sure that if the user did raise an exception, we do not
+					// crash the whole consuming task. Sometimes java was right when adding exceptions to a method signature
+					try {
+						if (errorWorker.UseBackgroundThread)
+							await Task.Run (async () => {
+								await errorWorker.ConsumeAsync (
+									item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
+							}, cancellationToken);
+						else
 							await errorWorker.ConsumeAsync (
 								item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
-						}, cancellationToken);
-					else
-						await errorWorker.ConsumeAsync (
-							item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
+					} catch {
+						// do nothing for now. We will add logging later
+					}
 					continue;
 				}
 				switch (configuration.Mode) {
@@ -143,6 +149,12 @@ public class Hub : IHub {
 					await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout).ConfigureAwait (false);
 					break;
 				}
+			}
+		}
+		if (ch.Reader.Completion.IsCompleted) {
+			// notify all the workers that no more messages are going to happen
+			foreach (var worker in workersArray) {
+				await worker.OnChannelClosedAsync (name, cancellationToken).ConfigureAwait (false);
 			}
 		}
 	}
@@ -166,8 +178,8 @@ public class Hub : IHub {
 		// we have no interest in awaiting for this task, but we want to make sure it started. To do so
 		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
 		var completionSource = new TaskCompletionSource<bool>();
-		topicInfo.ConsumerTask = ConsumeChannel (
-			topicInfo.Configuration, topicInfo.Channel, topicInfo.ErrorWorker, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
+		topicInfo.ConsumerTask = ConsumeChannel (topicInfo.TopicName, topicInfo.Configuration, topicInfo.Channel, 
+			topicInfo.ErrorWorker, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
 		// send a message with a ack so that we can ensure we are indeed running
 		_ = topicInfo.Channel.Writer.WriteAsync (new (MessageType.Ack), topicInfo.CancellationTokenSource.Token);
 		return await completionSource.Task.ConfigureAwait (false);
@@ -284,6 +296,12 @@ public class Hub : IHub {
 		}
 	}
 
+	public async ValueTask PublishAsync<T> (string topicName, T? publishedEvent) where T : struct
+	{
+		if (publishedEvent is not null)
+			await PublishAsync (topicName, publishedEvent.Value);
+	}
+
 	public bool TryPublish<T> (string topicName, T publishedEvent) where T : struct
 	{
 		semaphoreSlim.Wait ();
@@ -296,6 +314,12 @@ public class Hub : IHub {
 		} finally {
 			semaphoreSlim.Release ();
 		}
+	}
+
+	public bool TryPublish<T> (string topicName, T? publishedEvent) where T : struct
+	{
+		return publishedEvent is not null
+		       && TryPublish (topicName, publishedEvent.Value);
 	}
 
 	public async Task CloseAllAsync ()

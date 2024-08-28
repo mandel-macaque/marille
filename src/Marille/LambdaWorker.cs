@@ -10,6 +10,8 @@ internal class LambdaWorker<T> (Func<T, CancellationToken,Task> lambda, bool use
 		await lambda (message, cancellationToken);
 	}
 
+	public Task OnChannelClosedAsync (string channelName, CancellationToken token = default) => Task.CompletedTask; 
+
 	public void Dispose () { }
 
 	public ValueTask DisposeAsync () => ValueTask.CompletedTask;

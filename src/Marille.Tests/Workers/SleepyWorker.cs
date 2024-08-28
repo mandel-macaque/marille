@@ -20,6 +20,8 @@ public class SleepyWorker : IWorker<WorkQueuesEvent> {
 		Completion.TrySetResult (true);
 	}
 
+	public Task OnChannelClosedAsync (string channelName, CancellationToken token = default) => Task.CompletedTask; 
+
 	public void Dispose () { }
 
 	public ValueTask DisposeAsync () => ValueTask.CompletedTask;

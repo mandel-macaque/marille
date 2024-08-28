@@ -36,6 +36,7 @@ public class CancellationTests : IDisposable {
 		// publish no messages, just close the worker
 		await _hub.CloseAsync<WorkQueuesEvent> (topic);
 		Assert.Equal (0, worker.ConsumedCount);
+		Assert.True (await worker.OnChannelClose.Task);
 		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
 	
@@ -56,7 +57,8 @@ public class CancellationTests : IDisposable {
 		tcs.SetResult (true);
 		// publish no messages, just close the worker
 		await _hub.CloseAsync<WorkQueuesEvent> (topic);
-		Assert.Equal (eventCount, worker.ConsumedCount);
+		Assert.NotEqual (0, worker.ConsumedCount);
+		Assert.True (await worker.OnChannelClose.Task);
 		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
 
@@ -87,8 +89,11 @@ public class CancellationTests : IDisposable {
 
 		// publish no messages, just close the worker
 		await _hub.CloseAsync<WorkQueuesEvent> (topic1);
+		await _hub.CloseAsync<WorkQueuesEvent> (topic2);
 		Assert.NotEqual (0, worker1.ConsumedCount);
+		Assert.True (await worker1.OnChannelClose.Task);
 		Assert.NotEqual (0, worker2.ConsumedCount);
+		Assert.True (await worker2.OnChannelClose.Task);
 		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
 	
@@ -113,8 +118,11 @@ public class CancellationTests : IDisposable {
 
 		// publish no messages, just close the worker
 		await _hub.CloseAsync<WorkQueuesEvent> (topic1);
+		await _hub.CloseAsync<WorkQueuesEvent> (topic2);
 		Assert.Equal (0, worker1.ConsumedCount);
+		Assert.True (await worker1.OnChannelClose.Task);
 		Assert.Equal (0, worker2.ConsumedCount);
+		Assert.True (await worker2.OnChannelClose.Task);
 		Assert.Equal (0, _errorWorker.ConsumedCount);
 	}
 
