@@ -57,6 +57,7 @@ jobs:
           path: ${{ env.NuGetDirectory }}/*.nupkg
 
   publish-docs:
+    name: Publish docs
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
