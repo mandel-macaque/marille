@@ -41,7 +41,7 @@ class MyWorker : IWorker<MyMessage> {
        => Task.FromResult (Completion.TrySetResult(true));
 }
 
-// creeate an error worker to handle exceptions from workers
+// create an error worker to handle exceptions from workers
 class ErrorWorker : IErrorWorker<MyMessage> {
     public bool UseBackgroundThread => false;
     
@@ -86,7 +86,7 @@ public Task ProduceMessage (string id, string operation, int value) =>
 
 4. Cancel and wait for events to be completed
 
-Becasue the entire library puspose of the library is to be able to process 
+Becasue the entire puspose of the library is to be able to process 
 events in a multithreaded manner, the main thread has to wait until the events
 are processed. That can be done by waiting on a Channel to be closed:
 
@@ -95,7 +95,7 @@ are processed. That can be done by waiting on a Channel to be closed:
 await _hub.CloseAsync<MyMessage> (topic);
 
 // close all topcis
-await _hub.CloseAsync<MyMessage> (topic1);
+await _hub.CloseAllAsync ();
 ```
 
 5. Error handling
