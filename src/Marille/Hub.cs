@@ -210,6 +210,7 @@ public class Hub : IHub {
 		return true;
 	}
 
+	/// <inheritdoc />
 	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
 		IErrorWorker<T> errorWorker, params IWorker<T>[] initialWorkers) where T : struct
 	{
@@ -234,28 +235,34 @@ public class Hub : IHub {
 		}
 	}
 
+	/// <inheritdoc />
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, IErrorWorker<T> errorWorker,
 		IEnumerable<IWorker<T>> initialWorkers) where T : struct
 		=> CreateAsync (topicName, configuration, errorWorker, initialWorkers.ToArray ());
 
+	/// <inheritdoc />
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
 		Func<T, Exception, CancellationToken, Task> errorAction, params Func<T, CancellationToken, Task> [] actions) where T : struct
 		=> CreateAsync (topicName, configuration, new LambdaErrorWorker<T> (errorAction), 
 			actions.Select (a => new LambdaWorker<T> (a)));
 
+	/// <inheritdoc />
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, IErrorWorker<T> errorWorker) where T : struct
 		=> CreateAsync (topicName, configuration, errorWorker, Array.Empty<IWorker<T>> ());
 
+	/// <inheritdoc />
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
 		Func<T, Exception, CancellationToken, Task> errorAction) where T : struct
 		=> CreateAsync (topicName, configuration, new LambdaErrorWorker<T> (errorAction));
 	
+	/// <inheritdoc />
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
 		Func<T, Exception, CancellationToken, Task> errorAction,
 		Func<T, CancellationToken, Task> action) where T : struct
 		=> CreateAsync (topicName, configuration, new LambdaErrorWorker<T> (errorAction),
 			new LambdaWorker<T> (action));
 
+	/// <inheritdoc />
 	public async Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
 	{
 		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
@@ -279,9 +286,11 @@ public class Hub : IHub {
 		}
 	}
 
+	/// <inheritdoc />
 	public Task<bool> RegisterAsync<T> (string topicName, Func<T, CancellationToken, Task> action)  where T : struct
 		=> RegisterAsync (topicName, new LambdaWorker<T> (action));
 
+	/// <inheritdoc />
 	public async ValueTask PublishAsync<T> (string topicName, T publishedEvent) where T : struct
 	{
 		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
@@ -296,12 +305,14 @@ public class Hub : IHub {
 		}
 	}
 
+	/// <inheritdoc />
 	public async ValueTask PublishAsync<T> (string topicName, T? publishedEvent) where T : struct
 	{
 		if (publishedEvent is not null)
 			await PublishAsync (topicName, publishedEvent.Value);
 	}
 
+	/// <inheritdoc />
 	public bool TryPublish<T> (string topicName, T publishedEvent) where T : struct
 	{
 		semaphoreSlim.Wait ();
@@ -316,12 +327,14 @@ public class Hub : IHub {
 		}
 	}
 
+	/// <inheritdoc />
 	public bool TryPublish<T> (string topicName, T? publishedEvent) where T : struct
 	{
 		return publishedEvent is not null
 		       && TryPublish (topicName, publishedEvent.Value);
 	}
 
+	/// <inheritdoc />
 	public async Task CloseAllAsync ()
 	{
 		// we are using this format to ensure that we have the right nullable types, if we where to use the following
@@ -353,6 +366,7 @@ public class Hub : IHub {
 		}
 	}
 
+	/// <inheritdoc />
 	public async Task<bool> CloseAsync<T> (string topicName) where T : struct
 	{
 		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
@@ -386,6 +400,7 @@ public class Hub : IHub {
 		}
 	}
 
+	/// <inheritdoc />
 	public void Dispose ()
 	{
 		Dispose (true);
@@ -400,6 +415,7 @@ public class Hub : IHub {
 		}
 	}
 
+	/// <inheritdoc />
 	public async ValueTask DisposeAsync ()
 	{
 		await DisposeAsyncCore ();
