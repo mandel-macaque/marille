@@ -1,0 +1,7 @@
+# Point to the index of the articles
+
+- name: Overview
+  href: index.md
+
+- name: Samples
+  href: samples/
