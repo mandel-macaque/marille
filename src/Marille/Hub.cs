@@ -63,7 +63,8 @@ public class Hub : IHub {
 		var tasks = new Task [workersArray.Length];
 		for(var index = 0; index < workersArray.Length; index++) {
 			var worker = workersArray [index];
-			if (worker.UseBackgroundThread) {
+			_ = worker.TryGetUseBackgroundThread (out var useBackgroundThread);
+			if (useBackgroundThread) {
 				tasks [index] = Task.Run (async () => {
 					await worker.ConsumeAsync (item.Payload, token).ConfigureAwait (false);
 				}, token);
@@ -88,7 +89,8 @@ public class Hub : IHub {
 			token = cts.Token;
 		}
 
-		var task = worker.UseBackgroundThread ? 
+		_ = worker.TryGetUseBackgroundThread (out var useBackgroundThread);
+		var task = useBackgroundThread ? 
 			Task.Run (async () => { 
 				await worker.ConsumeAsync (item.Payload, token).ConfigureAwait (false);
 			}, token) :
