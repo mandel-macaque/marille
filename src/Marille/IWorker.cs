@@ -9,8 +9,10 @@ public interface IWorker<in T> : IDisposable, IAsyncDisposable where T :  struct
 	/// <summary>
 	/// Specifies if the worker should use a background thread to process the messages. If set to
 	/// true the implementation of the worker should be thread safe.
+	///
+	/// The default implementation returns false.
 	/// </summary>
-	public bool UseBackgroundThread { get; }
+	public bool UseBackgroundThread { get => false; }
 
 	/// <summary>
 	/// Method that will be executed for every event in the channel that has been assigned
