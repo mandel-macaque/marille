@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
@@ -25,7 +25,7 @@
         <Company>themacaque.com</Company>
         <PackageIcon>icon.png</PackageIcon>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <PackageProjectUrl>https://github.com/mandel-macaque/marille</PackageProjectUrl>
+        <PackageProjectUrl>https://marille.io</PackageProjectUrl>
         <RepositoryUrl>https://github.com/mandel-macaque/marille</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
