@@ -1,6 +1,6 @@
 # yamllint disable rule:line-length
 # deployes the build to nuget and github releases
-name: Deploy docs on docs/* updates
+name: Auto deploy docs
 
 concurrency:
   group: "deployment"
