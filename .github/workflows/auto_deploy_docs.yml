@@ -1,0 +1,22 @@
+# yamllint disable rule:line-length
+# deployes the build to nuget and github releases
+name: Auto deploy docs
+
+concurrency:
+  group: "deployment"
+  cancel-in-progress: false
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  actions: read
+  pages: write
+  id-token: write
+
+on:
+  push:
+    paths:
+      - docs/*
+
+jobs:
+  publish-docs:
+    uses: ./.github/workflows/deploy_docs_job.yml
