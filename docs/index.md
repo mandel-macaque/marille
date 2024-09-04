@@ -1,4 +1,4 @@
-# marille
+# Quick Start
 Marille is thin layer on top of System.Threading.Channels that provides a in-process publisher/subscriber hub.
 
 The aim of the library is to simplify the management of several `Channels<T>` within an application. The general idea
@@ -86,8 +86,8 @@ public Task ProduceMessage (string id, string operation, int value) =>
 
 4. Cancel and wait for events to be completed
 
-Becasue the entire puspose of the library is to be able to process 
-events in a multithreaded manner, the main thread has to wait until the events
+Because the entire purpose of the library is to be able to process 
+events in a multi-threaded manner, the main thread has to wait until the events
 are processed. That can be done by waiting on a Channel to be closed:
 
 ```csharp

@@ -1,8 +1,13 @@
-- name: Overview
-  href: index.md
+items:
+  - href: index.md
 
-- name: Articles
-  href: articles/
+  - name: Samples
+    href: ./samples/index.md
+    items:
+      - name: Apple FS Events
+        href: ./samples/fsevents.md
+      - name: .Net FileSystemWatcher
+        href: ./samples/fswatcher.md
 
-- name: API
-  href: api/
+  - name: API
+    href: api/
