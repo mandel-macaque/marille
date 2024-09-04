@@ -14,38 +14,6 @@ permissions:
 
 on: workflow_dispatch
 
-env:
-  NuGetDirectory: ${{ github.workspace}}/nuget
-
 jobs:
   publish-docs:
-    name: Publish docs
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Install Docfx
-        run: dotnet tool update -g docfx
-
-      - name: Run Docfx
-        run: docfx docs/docfx.json
-
-      - name: Upload docs page
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'docs/_site'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+    uses: ./.github/workflows/deploy_docs_job.yml
