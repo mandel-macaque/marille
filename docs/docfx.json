@@ -30,6 +30,11 @@
         ]
       }
     ],
+    "sitemap": {
+      "baseUrl": "https://marille.io",
+      "priority": 0.5,
+      "changefreq": "monthly"
+    },
     "output": "_site",
     "template": [
       "default",
@@ -38,6 +43,8 @@
     "globalMetadata": {
       "_appName": "Marille",
       "_appTitle": "Marille",
+      "_disableToc": false,
+      "_disableAffix": false,
       "_enableSearch": true,
       "pdf": true
     }

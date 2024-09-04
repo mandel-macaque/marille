@@ -1,12 +1,12 @@
-# FileSystemWatcher sample
+# .Net FileSystemWatcher
 
 ## Intro
 
-The sample demostrates how to create a watch command that will observe a file directory for changes. The design of the app
-allows to get all the file system events as fast as possible into a Channel<FileSystemEventStruct> which is used a as a queue
-to process the events. The app will process the events using a worker that will filter the events and will send them to 
-a second Channel<TextFileChangedEvent>. The events from the second channel will be processed by any workers that have been registed
-to the second channel.
+The sample [sourece code](https://github.com/mandel-macaque/marille/tree/main/samples) demonstrates how to create a watch command 
+that will observe a file directory for changes. The design of the app allows to get all the file system events as fast as possible
+into a Channel<FileSystemEventStruct> which is used a as a queue to process the events. The app will process the events using a 
+worker that will filter the events and will send them to a second Channel<TextFileChangedEvent>. The events from the second channel 
+will be processed by any workers that have been register to the second channel.
 
 ## Channels and Workers
 
@@ -27,11 +27,11 @@ D --> |Consume| E[DiffGenerator]
 ```
 
 The above diagram shows the flow of a single event from the FileSystemWatcher to the final worker that will process the event. In this case
-if an event is regected by the FileSystemStructEventFilterer it will be discarded and the FileSystemWatcher will continue to listen for new events. 
+if an event is rejected by the FileSystemStructEventFilterer it will be discarded and the FileSystemWatcher will continue to listen for new events. 
 
 
 Marille supports IWorkers to throw exceptions in their ConsumeAsync methods. This is useful to be able to track problems when processing an event. Whenever
-a worker throws an exception the channel will continure puiblishing and consuming events yet a IErrorWorker will receive a new event with the exception. Each channel must have
+a worker throws an exception the channel will continue publishing and consuming events yet a IErrorWorker will receive a new event with the exception. Each channel must have
 a IErorWorker that will process the exceptions. 
 
 ```mermaid
@@ -126,8 +126,8 @@ In the above code we do the following:
 1. Create a new instance of the FileSystemStructEventFilterer and DiffGenerator. This will be the workers
    that will process the events.
 2. Create a new instance of the FileSystemEventStructErrorHandler and TextFileChangedErrorHandler. This will be the error workers
-   that will process any possible exceptions that are thrown by the consuming workers. Each worker will be registed to a specific channel.
-3. Use the hub to create the channels and workers. The hub will create the channels and workers and will registed the workers to the channels.
+   that will process any possible exceptions that are thrown by the consuming workers. Each worker will be registered to a specific channel.
+3. Use the hub to create the channels and workers. The hub will create the channels and workers and will registered the workers to the channels.
    Each channel will have a specific configuration that will define how the events will be delivered.
 
 ### FileSystemStructEventFilterer implementation
@@ -190,7 +190,7 @@ allow the hub to run the worker ConsumeAsync method in a background thread as op
 public bool UseBackgroundThread => true;
 ```
 
-The ConsumeAsync implemtation is more complicated. The first thing it does is to determine what type of event we have received and then will generate a diff based on the event
+The ConsumeAsync implementation is more complicated. The first thing it does is to determine what type of event we have received and then will generate a diff based on the event
 type. For example, if the event is a WatcherChangeTypes.Created the worker will read the file and will generate a diff with the new content, if it is a modify event the worker will
 compare the current content of the file with the content that it had when it took a snapshot of the file.
 
@@ -215,7 +215,7 @@ public async Task ConsumeAsync (TextFileChangedEvent currentMessage, Cancellatio
 ```
 
 As you can see the DiffGenerator worker takes advantage of the Marille Exception support and it throws a InvalidOperationException if the event type is not handled. This will allow the hub to catch the exception and to process 
-it in the appropiate ErrorWorker.
+it in the appropriate ErrorWorker.
 
 ### ErrorWorkers
 
@@ -292,7 +292,7 @@ public static FileSystemEventStruct FromRenamedEventArgs (RenamedEventArgs args)
 
 ## Main Loop
 
-Marilles consuming loops are executed in the current thread. Because of that it is important to make sure that the consuming loop does not block the thread. Teh FileSystemWatcher also 
+Marilles consuming loops are executed in the current thread. Because of that it is important to make sure that the consuming loop does not block the thread. The FileSystemWatcher also 
 uses the current thread to raise events. If both the Hub and the FileSystemWatcher are running in the same thread it is possible that the FileSystemWatcher will block the Hub from processing,
 we can avoid the situation by running the hub in a background thread:
 
@@ -363,4 +363,3 @@ watcher.EnableRaisingEvents = true;
 
 The TryPusblish method allows to publish an event from a sync method and will return false if the event could not be published, false otherwise. 
 This method will fail if we are trying to publish an event in a bounded channel and the channel is full. 
-
