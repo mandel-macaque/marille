@@ -12,7 +12,12 @@ permissions:
   pages: write
   id-token: write
 
-on: workflow_dispatch
+on:
+  push:
+    paths:
+      - docs/**
+  workflow_dispatch:
+    inputs: []
 
 env:
   NuGetDirectory: ${{ github.workspace}}/nuget
