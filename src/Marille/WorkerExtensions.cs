@@ -14,4 +14,15 @@ internal static class WorkerExtensions {
 			return false;
 		}
 	}
+	
+	public static bool TryGetUseBackgroundThread<T> (this IErrorWorker<T> worker, out bool useBackgroundThread) where T : struct
+	{
+		useBackgroundThread = false;
+		try {
+			useBackgroundThread = worker.UseBackgroundThread;
+			return true;
+		} catch {
+			return false;
+		}
+	}
 }
