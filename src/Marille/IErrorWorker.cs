@@ -11,7 +11,7 @@ public interface IErrorWorker<in T> : IDisposable, IAsyncDisposable where T : st
 	/// Specifies if the worker should use a background thread to process the messages. If set to
 	/// true the implementation of the worker should be thread safe.
 	/// </summary>
-	public bool UseBackgroundThread { get; }
+	public bool UseBackgroundThread { get => false; } 
 
 	/// <summary>
 	///
