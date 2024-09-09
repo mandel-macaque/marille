@@ -120,7 +120,8 @@ public class Hub : IHub {
 					// the error task in a try/catch to make sure that if the user did raise an exception, we do not
 					// crash the whole consuming task. Sometimes java was right when adding exceptions to a method signature
 					try {
-						if (errorWorker.UseBackgroundThread)
+						var _ = errorWorker.TryGetUseBackgroundThread (out var useBackgroundThread);
+						if (useBackgroundThread)
 							await Task.Run (async () => {
 								await errorWorker.ConsumeAsync (
 									item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
