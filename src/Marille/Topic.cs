@@ -40,13 +40,13 @@ internal class Topic (string name) : IDisposable, IAsyncDisposable {
 		return false;
 	}
 
-	public async Task RemoveChannel<T> () where T : struct
+	public TopicInfo<T>? RemoveChannel<T> () where T : struct
 	{
 		if (!TryGetChannel<T> (out var topicInfo))
-			return;
+			return null;
 
-		await topicInfo.DisposeAsync ();
 		channels.Remove (typeof (T));
+		return topicInfo;
 	}
 
 	#region IDisposable Support

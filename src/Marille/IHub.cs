@@ -122,18 +122,6 @@ public interface IHub : IDisposable, IAsyncDisposable {
 	/// of the messages while it adds the worker and will resume the processing after. Producer can be sending
 	/// messages while this operation takes place because messages will be buffered by the channel.</remarks>
 	public Task<bool> RegisterAsync<T> (string topicName, Func<T, CancellationToken, Task> action) where T : struct;
-	
-	/// <summary>
-	/// Allows to publish a message in a given topic. The message will be added to a channel and will be
-	/// consumed by any worker that might have been added.
-	/// </summary>
-	/// <param name="topicName">The topic name that will deliver messages to the worker.</param>
-	/// <param name="publishedEvent">The message to be publish in the topic.</param>
-	/// <typeparam name="T">The type of messages of the topic.</typeparam>
-	/// <returns>true of the message was delivered to the topic.</returns>
-	/// <exception cref="InvalidOperationException">Thrown if no topic can be found with the provided
-	/// (topicName, messageType) combination.</exception>
-	public ValueTask PublishAsync<T> (string topicName, T publishedEvent) where T : struct;
 
 	/// <summary>
 	/// Allows to publish a message in a given topic. The message will be added to a channel and will be
@@ -141,11 +129,27 @@ public interface IHub : IDisposable, IAsyncDisposable {
 	/// </summary>
 	/// <param name="topicName">The topic name that will deliver messages to the worker.</param>
 	/// <param name="publishedEvent">The message to be publish in the topic.</param>
+	/// <param name="cancellationToken"></param>
 	/// <typeparam name="T">The type of messages of the topic.</typeparam>
 	/// <returns>true of the message was delivered to the topic.</returns>
 	/// <exception cref="InvalidOperationException">Thrown if no topic can be found with the provided
 	/// (topicName, messageType) combination.</exception>
-	public ValueTask PublishAsync<T> (string topicName, T? publishedEvent) where T : struct;
+	public ValueTask PublishAsync<T> (string topicName, T publishedEvent, 
+		CancellationToken cancellationToken = default) where T : struct;
+
+	/// <summary>
+	/// Allows to publish a message in a given topic. The message will be added to a channel and will be
+	/// consumed by any worker that might have been added.
+	/// </summary>
+	/// <param name="topicName">The topic name that will deliver messages to the worker.</param>
+	/// <param name="publishedEvent">The message to be publish in the topic.</param>
+	/// <param name="cancellationToken"></param>
+	/// <typeparam name="T">The type of messages of the topic.</typeparam>
+	/// <returns>true of the message was delivered to the topic.</returns>
+	/// <exception cref="InvalidOperationException">Thrown if no topic can be found with the provided
+	/// (topicName, messageType) combination.</exception>
+	public ValueTask PublishAsync<T> (string topicName, T? publishedEvent,
+		CancellationToken cancellationToken = default) where T : struct;
 
 	/// <summary>
 	/// Allows to publish a message in the given topic. The method will fail on bounded channels depending on the
@@ -176,15 +180,17 @@ public interface IHub : IDisposable, IAsyncDisposable {
 	/// <summary>
 	/// Cancel all channels in the Hub and return a task that will be completed once all the channels have been flushed.
 	/// </summary>
+	/// <param name="cancellationToken"></param>
 	/// <returns>A task that will be completed once ALL the channels have been flushed.</returns>
-	public Task CloseAllAsync ();
+	public Task CloseAllAsync (CancellationToken cancellationToken = default);
 
 	/// <summary>
 	/// Cancels the channel in the Hub with the given token and returns a task that will be completed once the channel
 	/// has been flushed. 
 	/// </summary>
 	/// <param name="topicName">The name of the topic to cancel.</param>
+	/// <param name="cancellationToken"></param>
 	/// <typeparam name="T">The type of events of the topic.</typeparam>
 	/// <returns>A task that will be completed once the channel has been flushed.</returns>
-	public Task<bool> CloseAsync<T> (string topicName) where T : struct;
+	public Task<bool> CloseAsync<T> (string topicName, CancellationToken cancellationToken = default) where T : struct;
 }

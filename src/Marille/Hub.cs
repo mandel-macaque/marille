@@ -156,7 +156,12 @@ public class Hub : IHub {
 		if (ch.Reader.Completion.IsCompleted) {
 			// notify all the workers that no more messages are going to happen
 			foreach (var worker in workersArray) {
-				await worker.OnChannelClosedAsync (name, cancellationToken).ConfigureAwait (false);
+				try {
+					await worker.OnChannelClosedAsync (name, cancellationToken).ConfigureAwait (false);
+				} catch {
+					// OnChannelCloseAsync can throw! If that happens, we need to continue and
+					// ignore the exception. We need to somehow communicat this.
+				}
 			}
 		}
 	}
@@ -293,25 +298,27 @@ public class Hub : IHub {
 		=> RegisterAsync (topicName, new LambdaWorker<T> (action));
 
 	/// <inheritdoc />
-	public async ValueTask PublishAsync<T> (string topicName, T publishedEvent) where T : struct
+	public async ValueTask PublishAsync<T> (string topicName, T publishedEvent, 
+		CancellationToken cancellationToken = default) where T : struct
 	{
-		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
+		await semaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 		try {
 			if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
 				throw new InvalidOperationException (
 					$"Channel with topic {topicName} for event type {typeof (T)} not found");
 			var message = new Message<T> (MessageType.Data, publishedEvent);
-			await topicInfo.Channel.Writer.WriteAsync (message).ConfigureAwait (false);
+			await topicInfo.Channel.Writer.WriteAsync (message, cancellationToken).ConfigureAwait (false);
 		} finally {
 			semaphoreSlim.Release ();
 		}
 	}
 
 	/// <inheritdoc />
-	public async ValueTask PublishAsync<T> (string topicName, T? publishedEvent) where T : struct
+	public async ValueTask PublishAsync<T> (string topicName, T? publishedEvent,
+		CancellationToken cancellationToken = default) where T : struct
 	{
 		if (publishedEvent is not null)
-			await PublishAsync (topicName, publishedEvent.Value);
+			await PublishAsync (topicName, publishedEvent.Value, cancellationToken);
 	}
 
 	/// <inheritdoc />
@@ -337,7 +344,7 @@ public class Hub : IHub {
 	}
 
 	/// <inheritdoc />
-	public async Task CloseAllAsync ()
+	public async Task CloseAllAsync (CancellationToken cancellationToken = default)
 	{
 		// we are using this format to ensure that we have the right nullable types, if we where to use the following
 		// 
@@ -349,7 +356,7 @@ public class Hub : IHub {
 		// `Task.WhenAll (consumingTasks!);` 
 		//
 		// suppressing the warning is ugly when we do know how to help the compiler ;)
-		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
+		await semaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 		try {
 			var consumingTasks = from topic in topics.Values
 				let tasks = topic.ConsumerTasks
@@ -369,16 +376,25 @@ public class Hub : IHub {
 	}
 
 	/// <inheritdoc />
-	public async Task<bool> CloseAsync<T> (string topicName) where T : struct
+	public async Task<bool> CloseAsync<T> (string topicName, CancellationToken cancellationToken = default) where T : struct
 	{
-		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
+		await semaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 		try {
 			// ensure that the channels does exist, if not, return false
 			if (!TryGetChannel<T> (topicName, out var topic, out _))
 				return false;
 
-			// remove the channel, removing will call dispose
-			await topic.RemoveChannel<T> ().ConfigureAwait (false);
+			// remote the topic and clean its resources only when it has completed
+			// consuming all events
+			await using var topicInfo = topic.RemoveChannel<T> ();
+			if (topicInfo is null)
+				return false;
+			
+			await topicInfo.CloseChannel ().ConfigureAwait (false);
+			if (topicInfo.ConsumerTask is not null) {
+				await topicInfo.ConsumerTask;
+			}
+
 			// clean the topic if needed
 			if (topic.ChannelCount == 0) {
 				topics.Remove (topicName);

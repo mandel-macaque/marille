@@ -2,14 +2,14 @@ using Marille.Tests.Workers;
 
 namespace Marille.Tests;
 
-public class ErrorHandlingTests : IDisposable {
+public class ErrorHandlingTests : BaseTimeoutTest, IDisposable {
 
 	readonly Hub _hub;
 	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
 	readonly TaskCompletionSource<bool> _errorWorkerTcs;
 	TopicConfiguration _configuration;
 
-	public ErrorHandlingTests ()
+	public ErrorHandlingTests () : base (milliseconds: 10000)
 	{
 		_hub = new();
 		_errorWorkerTcs = new();
@@ -28,14 +28,15 @@ public class ErrorHandlingTests : IDisposable {
 	{
 		// create a new topic, post 3 events and consume them, one of them will throw an exception
 		// and we should be able to handle it appropriately
+		using var cts = GetCancellationToken ();
 		var topic = nameof(ErrorLambdaConsumeAsync);
 		var workerTcs = new TaskCompletionSource<bool> ();
 		var worker = new FastWorker ("worker1", workerTcs);
 		await _hub.CreateAsync (topic, _configuration, _errorWorker, worker);
 		// we will post 3 events, one of them will throw an exception
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"));
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true));
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"), cts.Token);
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true), cts.Token);
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"), cts.Token);
 		// await for the error worker to consume the events
 		await _errorWorkerTcs.Task;
 		Assert.Equal (1, _errorWorker.ConsumedCount);
@@ -49,6 +50,7 @@ public class ErrorHandlingTests : IDisposable {
 	public async Task ErrorLambdaConsumeAsync ()
 	{
 		// use the lambda notation to consume the events and assert that the error worker is called correctly
+		using var cts = GetCancellationToken ();
 		var topic = nameof(ErrorLambdaConsumeAsync);
 		int consumedCount = 0;
 		var messageId = string.Empty;
@@ -69,9 +71,9 @@ public class ErrorHandlingTests : IDisposable {
 		};
 		await _hub.CreateAsync (topic, _configuration, errorAction, workerAction);
 		// we will post 3 events, one of them will throw an exception
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"));
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true));
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"), cts.Token);
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true), cts.Token);
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"), cts.Token);
 		// await for the error worker to consume the events
 		await tcs.Task;
 		Assert.Equal (1, consumedCount);
@@ -87,6 +89,7 @@ public class ErrorHandlingTests : IDisposable {
 		// make sure that we do know how to deal with a situation in which we have a faulty error worker that
 		// throws an exception
 		
+		using var cts = GetCancellationToken ();
 		var topic = nameof(ErrorLambdaConsumeAsync);
 		int consumedCount = 0;
 		var messageId = string.Empty;
@@ -109,11 +112,11 @@ public class ErrorHandlingTests : IDisposable {
 		await _hub.CreateAsync (topic, _configuration, errorAction, workerAction);
 		// we will post 3 events, one of them will throw an exception, if we did not crash the consuming
 		// thread, we we should be able to consume all the events
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"));
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true));
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("1"), cts.Token);
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("2", true), cts.Token);
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"), cts.Token);
 		// await for the error worker to consume the events
-		await tcs.Task;
+		await tcs.Task.WaitAsync (cts.Token);
 		Assert.Equal (3, consumedCount);
 		// assert the id of the message and the exception
 		Assert.Equal ("2", messageId);
