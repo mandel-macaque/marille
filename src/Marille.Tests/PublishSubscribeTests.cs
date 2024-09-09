@@ -2,12 +2,12 @@ using Marille.Tests.Workers;
 
 namespace Marille.Tests;
 
-public class PublishSubscribeTests : IDisposable {
+public class PublishSubscribeTests : BaseTimeoutTest, IDisposable {
 	readonly Hub _hub;
 	readonly ErrorWorker<WorkQueuesEvent> _errorWorker;
 	readonly TopicConfiguration _configuration;
 
-	public PublishSubscribeTests ()
+	public PublishSubscribeTests () : base(milliseconds:1000)
 	{
 		// use a simpler channel that we will use to receive the events when
 		// a worker has completed its work
@@ -33,6 +33,7 @@ public class PublishSubscribeTests : IDisposable {
 	{
 		// create a collection of workers and ensure that all of them receive the single
 		// message we send
+		using var cts = GetCancellationToken ();
 		var workers = new List<(FastWorker Worker, TaskCompletionSource<bool> Tcs)> (workerCount);
 		for (var index = 0; index < workerCount; index++) {
 			var tcs = new TaskCompletionSource<bool> ();
@@ -44,7 +45,7 @@ public class PublishSubscribeTests : IDisposable {
 		await _hub.CreateAsync (topic, _configuration, _errorWorker, workers.Select (x => x.Worker));
 		// publish a single message that will be received by all workers meaning we should wait for ALL their
 		// task completion sources to be done
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID"), cts.Token);
 		var result = await Task.WhenAll (workers.Select (x => x.Tcs.Task));
 		Assert.Equal (workerCount, result.Length);
 		// assert that all did indeed return true
@@ -93,6 +94,7 @@ public class PublishSubscribeTests : IDisposable {
 	[InlineData(1000)]
 	public async Task SingleProducerSeveralSleepyConsumersPublishAsync (int workerCount)
 	{
+		using var cts = GetCancellationToken ();
 		// create a collection of workers and ensure that all of them receive the single
 		// message we send
 		var workers = new List<(SleepyWorker Worker, TaskCompletionSource<bool> Tcs)> (workerCount);
@@ -106,7 +108,7 @@ public class PublishSubscribeTests : IDisposable {
 		await _hub.CreateAsync (topic, _configuration, _errorWorker, workers.Select (x => x.Worker));
 		// publish a single message that will be received by all workers meaning we should wait for ALL their
 		// task completion sources to be done
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID"), cts.Token);
 		var result = await Task.WhenAll (workers.Select (x => x.Tcs.Task));
 		Assert.Equal (workerCount, result.Length);
 		// assert that all did indeed return true
@@ -153,6 +155,7 @@ public class PublishSubscribeTests : IDisposable {
 	[InlineData(1000)]
 	public async Task SingleProducerSeveralCPUConsumersPublishAsync (int workerCount)
 	{
+		using var cts = GetCancellationToken ();
 		// create a collection of workers and ensure that all of them receive the single
 		// message we send
 		var workers = new List<(BackgroundThreadWorker Worker, TaskCompletionSource<bool> Tcs)> (workerCount);
@@ -166,7 +169,7 @@ public class PublishSubscribeTests : IDisposable {
 		await _hub.CreateAsync (topic, _configuration, _errorWorker, workers.Select (x => x.Worker));
 		// publish a single message that will be received by all workers meaning we should wait for ALL their
 		// task completion sources to be done
-		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID"));
+		await _hub.PublishAsync (topic, new WorkQueuesEvent ("myID"), cts.Token);
 		var result = await Task.WhenAll (workers.Select (x => x.Tcs.Task));
 		Assert.Equal (workerCount, result.Length);
 		// assert that all did indeed return true

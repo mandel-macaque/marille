@@ -45,18 +45,18 @@ public class TopicTests : IDisposable {
 	}
 	
 	[Fact]
-	public async Task RemoveOnlyChannel ()
+	public void RemoveOnlyChannel ()
 	{
 		// remove the channel and ensure that it will be empty
 		var errorWorker = new ErrorWorker<int> ();
 		Assert.True (_topic.TryCreateChannel (_configuration, out _, errorWorker));
 		Assert.Equal (1, _topic.ChannelCount);
-		await _topic.RemoveChannel<int> ();
+		_topic.RemoveChannel<int> ();
 		Assert.Equal (0, _topic.ChannelCount);
 	}
 	
 	[Fact]
-	public async Task RemoveWithSeveralChannels ()
+	public void RemoveWithSeveralChannels ()
 	{
 		// ensure that only once channel will be removed
 		var errorWorker = new ErrorWorker<int> ();
@@ -64,7 +64,7 @@ public class TopicTests : IDisposable {
 		Assert.True (_topic.TryCreateChannel (_configuration, out _, errorWorker));
 		Assert.True (_topic.TryCreateChannel (_configuration, out _, errorWorker2));
 		Assert.Equal (2, _topic.ChannelCount);
-		await _topic.RemoveChannel<int> ();
+		_topic.RemoveChannel<int> ();
 		Assert.Equal (1, _topic.ChannelCount);
 	}
 	

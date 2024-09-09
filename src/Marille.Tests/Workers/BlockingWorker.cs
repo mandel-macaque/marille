@@ -22,7 +22,7 @@ public class BlockingWorker (TaskCompletionSource<bool> readyToConsume) : IWorke
 	public Task OnChannelClosedAsync (string channelName, CancellationToken token = default)
 	{
 		OnChannelClose.TrySetResult (true);
-		return Task.CompletedTask;
+		return OnChannelClose.Task;
 	}
 
 	public void Dispose () { }
