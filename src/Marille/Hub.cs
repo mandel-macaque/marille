@@ -11,7 +11,7 @@ public class Hub : IHub {
 	readonly SemaphoreSlim semaphoreSlim;
 	readonly Dictionary<string, Topic> topics = new();
 	readonly ILoggerFactory? loggerFactory;
-	private readonly ILogger<Hub>? logger;
+	readonly ILogger<Hub>? logger;
 
 	public Hub (ILoggerFactory? logging = null) : this (new (1), logging)  { }
 	internal Hub (SemaphoreSlim semaphore, ILoggerFactory? logging = null)
@@ -21,45 +21,51 @@ public class Hub : IHub {
 		logger = loggerFactory?.CreateLogger<Hub> ();
 	}
 
-	async Task HandleConsumerError<T> (Task task, Channel<Message<T>> channel, Message<T> item)
+	async Task HandleConsumerError<T> (string name, Task task, Channel<Message<T>> channel, Message<T> item)
 		where T : struct
 	{
 		try {
 			await task.ConfigureAwait (false);
 		} catch (OperationCanceledException) {
 			// retry on cancel
+			logger?.LogTraceRetryOnCancel (name, typeof(T), item.Payload);
 			await channel.Writer.WriteAsync (item).ConfigureAwait (false);
 		} catch (Exception e) {
 			// pump an error message back to the channel that will be dealt by the error worker
+			logger?.LogTracePumpErrorMessage (name, typeof(T), item.Payload, e);
 			var error = new Message<T> (item.Payload, e);
 			await channel.Writer.WriteAsync (error).ConfigureAwait (false);
 		}
 	}
 
-	void DeliverAtLeastOnceAsync<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item, 
+	void DeliverAtLeastOnceAsync<T> (string name, Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item, 
 		TimeSpan? timeout)
 		where T : struct
 	{
+		logger?.LogTraceDeliverAtLeastOnceAsync (item.Payload, name, typeof(T));
 		Parallel.ForEachAsync  (workersArray, async (worker, _) => {
 			CancellationToken token = default;
 			if (timeout.HasValue) {
+				logger?.LogTraceTimeoutCreation (timeout.Value);
 				var cts = new CancellationTokenSource ();
 				cts.CancelAfter (timeout.Value);
 				token = cts.Token;
 			}
 			var task = worker.ConsumeAsync (item.Payload, token);
-			await HandleConsumerError (task, channel, item);
+			await HandleConsumerError (name, task, channel, item);
 		});
 	}
 
-	Task DeliverAtLeastOnceSync<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item,
+	Task DeliverAtLeastOnceSync<T> (string name, Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item,
 		TimeSpan? timeout)
 		where T : struct
 	{
+		logger?.LogTraceDeliverAtLeastOnceSync (item.Payload, name, typeof(T));
 		// we just need to execute all the provider workers with the same message and return the
 		// task when all are done
 		CancellationToken token = default;
 		if (timeout.HasValue) {
+			logger?.LogTraceTimeoutCreation (timeout.Value);
 			var cts = new CancellationTokenSource ();
 			cts.CancelAfter (timeout.Value);
 			token = cts.Token;
@@ -77,18 +83,20 @@ public class Hub : IHub {
 				tasks [index] = worker.ConsumeAsync (item.Payload, token);
 			}
 		}
-		return HandleConsumerError (Task.WhenAll (tasks), channel, item);
+		return HandleConsumerError (name, Task.WhenAll (tasks), channel, item);
 	}
 
-	Task DeliverAtMostOnce<T> (Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item,
+	Task DeliverAtMostOnceAsync<T> (string name, Channel<Message<T>> channel, IWorker<T> [] workersArray, Message<T> item,
 		TimeSpan? timeout)
 		where T : struct
 	{
+		logger?.LogTraceDeliverAtMostOnceAsync (item.Payload, name, typeof(T));
 		// we do know we are not empty, and in the AtMostOnce mode we will only use the first worker
 		// present
 		var worker = workersArray [0];
 		CancellationToken token = default;
 		if (timeout.HasValue) {
+			logger?.LogTraceTimeoutCreation (timeout.Value);
 			var cts = new CancellationTokenSource ();
 			cts.CancelAfter (timeout.Value);
 			token = cts.Token;
@@ -100,7 +108,7 @@ public class Hub : IHub {
 				await worker.ConsumeAsync (item.Payload, token).ConfigureAwait (false);
 			}, token) :
 			worker.ConsumeAsync (item.Payload, token);
-		return HandleConsumerError (task, channel, item); 
+		return HandleConsumerError (name, task, channel, item); 
 	}
 
 	async Task ConsumeChannel<T> (string name, TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
@@ -118,9 +126,12 @@ public class Hub : IHub {
 		       && (completionSource.Task.IsCompleted || completionSource.TrySetResult (true))) {
 			while (ch.Reader.TryRead (out var item)) {
 				// filter the ack message since it is only used to make sure that the task is indeed consuming
-				if (item.Type == MessageType.Ack) 
+				if (item.Type == MessageType.Ack) {
+					logger?.LogTraceAckReceived (name, typeof(T));		
 					continue;
+				}
 				if (item.IsError) {
+					logger?.LogTraceErrorReceived (name, typeof(T), item.Payload, item.Exception);
 					// do wait for the error worker to finish, we do not want to lose any error. We are going to wrap
 					// the error task in a try/catch to make sure that if the user did raise an exception, we do not
 					// crash the whole consuming task. Sometimes java was right when adding exceptions to a method signature
@@ -141,22 +152,23 @@ public class Hub : IHub {
 					}
 					continue;
 				}
+				logger?.LogTraceConsumeMessage (name, typeof(T), item.Payload);
 				switch (configuration.Mode) {
 				case ChannelDeliveryMode.AtLeastOnceAsync:
-					DeliverAtLeastOnceAsync (ch, workersArray, item, configuration.Timeout);
+					DeliverAtLeastOnceAsync (name, ch, workersArray, item, configuration.Timeout);
 					break;
 				case ChannelDeliveryMode.AtLeastOnceSync:
 					// make the call 'sync' by not processing an item until we are done with the current one
 					await DeliverAtLeastOnceSync (
-						ch, workersArray, item, configuration.Timeout).ConfigureAwait (false);
+						name, ch, workersArray, item, configuration.Timeout).ConfigureAwait (false);
 					break;
 				case ChannelDeliveryMode.AtMostOnceAsync:
 					_ = Task.Run (async () => 
-						await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout), cancellationToken);
+						await DeliverAtMostOnceAsync (name, ch, workersArray, item, configuration.Timeout), cancellationToken);
 					break;
 				case ChannelDeliveryMode.AtMostOnceSync:
 					// make the call 'sync' by not processing an item until we are done with the current one
-					await DeliverAtMostOnce (ch, workersArray, item, configuration.Timeout).ConfigureAwait (false);
+					await DeliverAtMostOnceAsync (name, ch, workersArray, item, configuration.Timeout).ConfigureAwait (false);
 					break;
 				}
 			}
@@ -165,6 +177,7 @@ public class Hub : IHub {
 			// notify all the workers that no more messages are going to happen
 			foreach (var worker in workersArray) {
 				try {
+					logger?.LogTraceCallOnChannelClose (worker.GetType (), name, typeof(T));
 					await worker.OnChannelClosedAsync (name, cancellationToken).ConfigureAwait (false);
 				} catch (Exception exception) {
 					// OnChannelCloseAsync can throw! If that happens, we need to continue and
