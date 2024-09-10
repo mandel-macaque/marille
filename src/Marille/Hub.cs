@@ -135,7 +135,9 @@ public class Hub : IHub {
 							await errorWorker.ConsumeAsync (
 								item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
 					} catch {
-						// do nothing for now. We will add logging later
+						// should we log the exception we are ignoring?
+						logger?.LogErrorConsumerException (errorWorker.GetType (), item.Payload, item.Exception, name,
+							typeof(T));
 					}
 					continue;
 				}
@@ -164,9 +166,10 @@ public class Hub : IHub {
 			foreach (var worker in workersArray) {
 				try {
 					await worker.OnChannelClosedAsync (name, cancellationToken).ConfigureAwait (false);
-				} catch {
+				} catch (Exception exception) {
 					// OnChannelCloseAsync can throw! If that happens, we need to continue and
 					// ignore the exception. We need to somehow communicat this.
+					logger?.LogErrorOnChannelClose (worker.GetType (), exception, name, typeof(T));
 				}
 			}
 		}
