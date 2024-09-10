@@ -38,16 +38,16 @@ internal static partial class ErrorMessages {
 	internal static partial void LogCloseErrorTopicDoesNotExist (this ILogger logger, string topicName, Type topicType);
 	
 	[LoggerMessage(
-		Message = "ErrorWorker {ErrorWorker} failed to process message {Message} with {Exception} on {TopicName} of {TopicType}", 
+		Message = "ErrorWorker {ErrorWorker} failed to process message {Message} on {TopicName} of {TopicType}", 
 		Level = LogLevel.Error,
 		SkipEnabledCheck = true)]
 	internal static partial void LogErrorConsumerException (this ILogger logger, Type errorWorker, object message, 
 		Exception exception, string topicName, Type topicType);
 	
 	[LoggerMessage(
-		Message = "Worker {Worker} raised {Exception} OnChannelClose for {TopicName} of {TopicType}",
+		Message = "Worker {Worker} raised OnChannelClose for {TopicName} of {TopicType}",
 		Level = LogLevel.Error,
 		SkipEnabledCheck = true)]
-	internal static partial void LogErrorOnChannelClose (this ILogger logger, Type worker, Exception exception, 
+	internal static partial void LogErrorOnChannelClose (this ILogger logger, Type worker, Exception exceptionOnClose, 
 		string topicName, Type topicType);
 }
