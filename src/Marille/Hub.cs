@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 
 namespace Marille;
 
@@ -9,11 +10,15 @@ namespace Marille;
 public class Hub : IHub {
 	readonly SemaphoreSlim semaphoreSlim;
 	readonly Dictionary<string, Topic> topics = new();
+	readonly ILoggerFactory? loggerFactory;
+	private readonly ILogger<Hub>? logger;
 
-	public Hub () : this (new (1))  { }
-	internal Hub (SemaphoreSlim semaphore)
+	public Hub (ILoggerFactory? logging = null) : this (new (1), logging)  { }
+	internal Hub (SemaphoreSlim semaphore, ILoggerFactory? logging = null)
 	{
 		semaphoreSlim = semaphore;
+		loggerFactory = logging;
+		logger = loggerFactory?.CreateLogger<Hub> ();
 	}
 
 	async Task HandleConsumerError<T> (Task task, Channel<Message<T>> channel, Message<T> item)
@@ -222,8 +227,12 @@ public class Hub : IHub {
 	public async Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,
 		IErrorWorker<T> errorWorker, params IWorker<T>[] initialWorkers) where T : struct
 	{
-		if (configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && initialWorkers.Length > 1)
+		logger?.LogCreateTopic (topicName, typeof(T));
+
+		if (configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && initialWorkers.Length > 1) {
+			logger?.LogWrongWorkerCount (topicName, typeof(T), configuration.Mode, initialWorkers.Length);	
 			return false;
+		}
 
 		// the topic might already have the channel, in that case, do nothing
 		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
@@ -233,8 +242,10 @@ public class Hub : IHub {
 				topics [topicName] = topic;
 			}
 
-			if (!topic.TryCreateChannel (configuration, out var topicInfo, errorWorker, initialWorkers))
+			if (!topic.TryCreateChannel (configuration, out var topicInfo, errorWorker, initialWorkers)) {
+				logger?.LogTopicAlreadyExists (topicName, typeof(T));	
 				return false;
+			}
 
 			await StartConsuming (topicInfo).ConfigureAwait (false);
 			return true;
@@ -273,16 +284,21 @@ public class Hub : IHub {
 	/// <inheritdoc />
 	public async Task<bool> RegisterAsync<T> (string topicName, params IWorker<T>[] newWorkers) where T : struct
 	{
+		logger?.LogRegisterWorkers (topicName, typeof(T), newWorkers.Length);
 		await semaphoreSlim.WaitAsync ().ConfigureAwait (false);
 		try {
 			// we only allow the client to register to an existing topic
 			// in this API we will not create it, there are other APIs for that
-			if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
+			if (!TryGetChannel<T> (topicName, out _, out var topicInfo)) {
+				logger?.LogRegisterErrorTopicDoesNotExist (topicName, typeof(T));
 				return false;
+			}
 
 			// do not allow to add more than one worker if we are in AtMostOnce mode.
-			if (topicInfo.Configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && topicInfo.Workers.Count >= 1)
+			if (topicInfo.Configuration.Mode == ChannelDeliveryMode.AtMostOnceAsync && topicInfo.Workers.Count >= 1) {
+				logger?.LogRegisterErrorTooManyWorkers (topicName, typeof(T), topicInfo.Configuration.Mode, topicInfo.Workers.Count);	
 				return false;
+			}
 
 			// we will have to stop consuming while we add the new worker
 			// but we do not need to close the channel, the API will buffer
@@ -304,9 +320,13 @@ public class Hub : IHub {
 	{
 		await semaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 		try {
-			if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
+			if (!TryGetChannel<T> (topicName, out _, out var topicInfo)) {
+				logger?.LogPublishErrorTopicDoesNotExist (topicName, typeof(T));
 				throw new InvalidOperationException (
-					$"Channel with topic {topicName} for event type {typeof (T)} not found");
+					$"Channel with topic {topicName} for event type {typeof(T)} not found");
+			}
+
+			logger?.LogPublishAsyncEvent (topicName, publishedEvent);
 			var message = new Message<T> (MessageType.Data, publishedEvent);
 			await topicInfo.Channel.Writer.WriteAsync (message, cancellationToken).ConfigureAwait (false);
 		} finally {
@@ -327,9 +347,12 @@ public class Hub : IHub {
 	{
 		semaphoreSlim.Wait ();
 		try {
-			if (!TryGetChannel<T> (topicName, out _, out var topicInfo))
+			if (!TryGetChannel<T> (topicName, out _, out var topicInfo)) {
 				throw new InvalidOperationException (
-					$"Channel with topic {topicName} for event type {typeof (T)} not found");
+					$"Channel with topic {topicName} for event type {typeof(T)} not found");
+			}
+
+			logger?.LogTryPublishEvent (topicName, publishedEvent);
 			var message = new Message<T> (MessageType.Data, publishedEvent);
 			return topicInfo.Channel.Writer.TryWrite (message);
 		} finally {
@@ -371,6 +394,7 @@ public class Hub : IHub {
 
 			// the DisposeAsync should be closing the channels, but we will wait for the tasks to finish anyway
 			await Task.WhenAll (consumingTasks).ConfigureAwait (false);
+			logger?.LogCloseAllAsync ();
 		} finally {
 			semaphoreSlim.Release ();
 		}
@@ -382,8 +406,10 @@ public class Hub : IHub {
 		await semaphoreSlim.WaitAsync (cancellationToken).ConfigureAwait (false);
 		try {
 			// ensure that the channels does exist, if not, return false
-			if (!TryGetChannel<T> (topicName, out var topic, out _))
+			if (!TryGetChannel<T> (topicName, out var topic, out _)) {
+				logger?.LogCloseErrorTopicDoesNotExist (topicName, typeof(T));	
 				return false;
+			}
 
 			// remote the topic and clean its resources only when it has completed
 			// consuming all events
@@ -400,6 +426,7 @@ public class Hub : IHub {
 			if (topic.ChannelCount == 0) {
 				topics.Remove (topicName);
 			}
+			logger?.LogCloseAsync (topicName, typeof(T));
 			return true;
 		} finally {
 			semaphoreSlim.Release ();
