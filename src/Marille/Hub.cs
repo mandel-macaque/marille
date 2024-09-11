@@ -26,15 +26,18 @@ public class Hub : IHub {
 	{
 		try {
 			await task.ConfigureAwait (false);
-		} catch (OperationCanceledException) {
-			// retry on cancel
-			logger?.LogTraceRetryOnCancel (name, typeof(T), item.Payload);
-			await channel.Writer.WriteAsync (item).ConfigureAwait (false);
 		} catch (Exception e) {
-			// pump an error message back to the channel that will be dealt by the error worker
-			logger?.LogTracePumpErrorMessage (name, typeof(T), item.Payload, e);
-			var error = new Message<T> (item.Payload, e);
-			await channel.Writer.WriteAsync (error).ConfigureAwait (false);
+			if (Interlocked.Decrement (ref item.Retries) > 0) {
+				// retry on cancel
+				logger?.LogTraceRetryOnCancel (name, typeof(T), item.Payload);
+				await channel.Writer.WriteAsync (item).ConfigureAwait (false);
+			} else {
+				// pump an error message back to the channel that will be dealt by the error worker
+				logger?.LogTracePumpErrorMessage (name, typeof(T), item.Payload, e);
+				var error = new Message<T> (item.Payload, 
+					new InvalidOperationException ("Retry limit reached", e));
+				await channel.Writer.WriteAsync (error).ConfigureAwait (false);
+			}
 		}
 	}
 
@@ -343,7 +346,7 @@ public class Hub : IHub {
 			}
 
 			logger?.LogPublishAsyncEvent (topicName, publishedEvent);
-			var message = new Message<T> (MessageType.Data, publishedEvent);
+			var message = new Message<T> (MessageType.Data, publishedEvent, topicInfo.Configuration.MaxRetries);
 			await topicInfo.Channel.Writer.WriteAsync (message, cancellationToken).ConfigureAwait (false);
 		} finally {
 			semaphoreSlim.Release ();
@@ -369,7 +372,7 @@ public class Hub : IHub {
 			}
 
 			logger?.LogTryPublishEvent (topicName, publishedEvent);
-			var message = new Message<T> (MessageType.Data, publishedEvent);
+			var message = new Message<T> (MessageType.Data, publishedEvent, topicInfo.Configuration.MaxRetries);
 			return topicInfo.Channel.Writer.TryWrite (message);
 		} finally {
 			semaphoreSlim.Release ();

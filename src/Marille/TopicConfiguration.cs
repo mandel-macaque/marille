@@ -16,10 +16,15 @@ public struct TopicConfiguration () {
 	/// When no capacity (null) is provided, the channel won't have a capacity and producers will
 	/// be able to write in the channel as much as they want as long as it is opened.
 	/// </summary>
-	public int? Capacity { get; set; } = null;
+	public int? MaxCapacity { get; set; } = null;
 	
 	/// <summary>
 	/// Default timeout for the workers that consume messages in the channel. 
 	/// </summary>
 	public TimeSpan? Timeout { get; set; } = null;
+
+	/// <summary>
+	/// Max number of retries that will be performed when a worker fails to consume a message.
+	/// </summary>
+	public uint? MaxRetries { get; set; } = null;
 }
