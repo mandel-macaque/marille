@@ -29,9 +29,9 @@ internal class Topic (string name) : IDisposable, IAsyncDisposable {
 	{
 		Type type = typeof (T);
 		if (!TryGetChannel (out topicInfo)) {
-			var ch = (configuration.Capacity is null) ? 
+			var ch = (configuration.MaxCapacity is null) ? 
 				Channel.CreateUnbounded<Message<T>> () : 
-				Channel.CreateBounded<Message<T>> (configuration.Capacity.Value);
+				Channel.CreateBounded<Message<T>> (configuration.MaxCapacity.Value);
 			topicInfo = new(Name, configuration, ch, errorWorker, workers);
 			channels[type] = topicInfo;
 			return true;
