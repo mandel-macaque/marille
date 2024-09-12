@@ -92,15 +92,15 @@ public class ErrorHandlingTests : BaseTimeoutTest, IDisposable {
 		using var cts = GetCancellationToken ();
 		var topic = nameof(ErrorLambdaConsumeAsync);
 		int consumedCount = 0;
-		var messageId = string.Empty;
 		var tcs = new TaskCompletionSource<bool> ();
-		Func<WorkQueuesEvent, Exception, CancellationToken, Task> errorAction = (_, _, _) => {
+		var errorTcs = new TaskCompletionSource<string> ();
+		Func<WorkQueuesEvent, Exception, CancellationToken, Task> errorAction = (message, _, _) => {
+			errorTcs.TrySetResult (message.Id);
 			// Terrible idea, but users make mistakes
 			throw new InvalidOperationException ($"Bad error worker");
 		};
 		Func<WorkQueuesEvent, CancellationToken, Task> workerAction = (message, _) => {
 			if (message.IsError) {
-				messageId = message.Id;
 				throw new InvalidOperationException ($"Error message with id {message.Id}");
 			}
 
@@ -116,6 +116,7 @@ public class ErrorHandlingTests : BaseTimeoutTest, IDisposable {
 		await _hub.PublishAsync (topic, new WorkQueuesEvent ("3"), cts.Token);
 		// await for the error worker to consume the events
 		await tcs.Task.WaitAsync (cts.Token);
+		var messageId = await errorTcs.Task.WaitAsync (cts.Token);
 		Assert.Equal (2, consumedCount);
 		// assert the id of the message and the exception
 		Assert.Equal ("2", messageId);

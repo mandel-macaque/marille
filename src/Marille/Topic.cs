@@ -11,7 +11,8 @@ internal class Topic (string name) : IDisposable, IAsyncDisposable {
 
 	public IEnumerable<Task> ConsumerTasks => from info in channels.Values
 		where info.ConsumerTask is not null
-		select info.ConsumerTask;
+		where info.ConsumerTask?.Task is not null
+		select info.ConsumerTask?.Task;
 
 	public bool TryGetChannel<T> ([NotNullWhen (true)] out TopicInfo<T>? channel) where T : struct
 	{
