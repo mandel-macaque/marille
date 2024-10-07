@@ -47,13 +47,7 @@ public class Hub : IHub {
 	{
 		logger?.LogTraceDeliverAtLeastOnceAsync (item.Payload, name, typeof(T));
 		Parallel.ForEachAsync  (workersArray, async (worker, _) => {
-			CancellationToken token = default;
-			if (timeout.HasValue) {
-				logger?.LogTraceTimeoutCreation (timeout.Value);
-				var cts = new CancellationTokenSource ();
-				cts.CancelAfter (timeout.Value);
-				token = cts.Token;
-			}
+			var token = timeout.GetCancellationToken (logger);
 			var task = worker.ConsumeAsync (item.Payload, token);
 			await HandleConsumerError (name, task, channel, item);
 		});
@@ -66,25 +60,10 @@ public class Hub : IHub {
 		logger?.LogTraceDeliverAtLeastOnceSync (item.Payload, name, typeof(T));
 		// we just need to execute all the provider workers with the same message and return the
 		// task when all are done
-		CancellationToken token = default;
-		if (timeout.HasValue) {
-			logger?.LogTraceTimeoutCreation (timeout.Value);
-			var cts = new CancellationTokenSource ();
-			cts.CancelAfter (timeout.Value);
-			token = cts.Token;
-		}
-
+		var token = timeout.GetCancellationToken (logger);
 		var tasks = new Task [workersArray.Length];
 		for(var index = 0; index < workersArray.Length; index++) {
-			var worker = workersArray [index];
-			_ = worker.TryGetUseBackgroundThread (out var useBackgroundThread);
-			if (useBackgroundThread) {
-				tasks [index] = Task.Run (async () => {
-					await worker.ConsumeAsync (item.Payload, token).ConfigureAwait (false);
-				}, token);
-			} else {
-				tasks [index] = worker.ConsumeAsync (item.Payload, token);
-			}
+			tasks [index] = workersArray [index].ConsumeThreadAsync (item.Payload, token);
 		}
 		return HandleConsumerError (name, Task.WhenAll (tasks), channel, item);
 	}
@@ -97,20 +76,8 @@ public class Hub : IHub {
 		// we do know we are not empty, and in the AtMostOnce mode we will only use the first worker
 		// present
 		var worker = workersArray [0];
-		CancellationToken token = default;
-		if (timeout.HasValue) {
-			logger?.LogTraceTimeoutCreation (timeout.Value);
-			var cts = new CancellationTokenSource ();
-			cts.CancelAfter (timeout.Value);
-			token = cts.Token;
-		}
-
-		_ = worker.TryGetUseBackgroundThread (out var useBackgroundThread);
-		var task = useBackgroundThread ? 
-			Task.Run (async () => { 
-				await worker.ConsumeAsync (item.Payload, token).ConfigureAwait (false);
-			}, token) :
-			worker.ConsumeAsync (item.Payload, token);
+		var token = timeout.GetCancellationToken (logger);
+		var task = worker.ConsumeThreadAsync (item.Payload, token);
 		return HandleConsumerError (name, task, channel, item); 
 	}
 
@@ -148,14 +115,14 @@ public class Hub : IHub {
 								await parallelSemaphore.WaitAsync (cancellationToken);
 							await Task.Run (async () => {
 								try {
-									await errorWorker.ConsumeAsync (
+									await errorWorker.ConsumeThreadAsync (
 										item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
 								} finally {
 									parallelSemaphore?.Release ();
 								}
 							}, cancellationToken);
 						} else {
-							await errorWorker.ConsumeAsync (
+							await errorWorker.ConsumeThreadAsync (
 								item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
 						}
 					} catch {
