@@ -82,7 +82,8 @@ public class Hub : IHub {
 	}
 
 	async Task ConsumeChannel<T> (string name, TopicConfiguration configuration, Channel<Message<T>> ch, IErrorWorker<T> errorWorker, 
-		IWorker<T>[] workersArray, TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken) where T : struct
+		IWorker<T>[] workersArray, TaskCompletionSource<bool> completionSource, CancellationToken cancellationToken, 
+		SemaphoreSlim? parallelSemaphore) where T : struct
 	{
 		// this is an important check, else the items will be consumer with no worker to receive them
 		if (workersArray.Length == 0) {
@@ -106,7 +107,24 @@ public class Hub : IHub {
 					// the error task in a try/catch to make sure that if the user did raise an exception, we do not
 					// crash the whole consuming task. Sometimes java was right when adding exceptions to a method signature
 					try {
-						await errorWorker.ConsumeThreadAsync (item.Payload, item.Exception, cancellationToken);
+						var _ = errorWorker.TryGetUseBackgroundThread (out var useBackgroundThread);
+						if (useBackgroundThread) {
+							// if we are using a thread and we want to limit the number of parallel tasks, we need to
+							// get the semaphore before we start the task, then release it when we are done
+							if (parallelSemaphore is not null)
+								await parallelSemaphore.WaitAsync (cancellationToken);
+							await Task.Run (async () => {
+								try {
+									await errorWorker.ConsumeThreadAsync (
+										item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
+								} finally {
+									parallelSemaphore?.Release ();
+								}
+							}, cancellationToken);
+						} else {
+							await errorWorker.ConsumeThreadAsync (
+								item.Payload, item.Exception, cancellationToken).ConfigureAwait (false);
+						}
 					} catch {
 						// should we log the exception we are ignoring?
 						logger?.LogErrorConsumerException (errorWorker.GetType (), item.Payload, item.Exception, name,
@@ -125,8 +143,17 @@ public class Hub : IHub {
 						name, ch, workersArray, item, configuration.Timeout).ConfigureAwait (false);
 					break;
 				case ChannelDeliveryMode.AtMostOnceAsync:
-					_ = Task.Run (async () => 
-						await DeliverAtMostOnceAsync (name, ch, workersArray, item, configuration.Timeout), cancellationToken);
+					// because we are using diff threads, we need to make sure that we do not consume too many resources,
+					// we grab the semaphore and release it when we are done
+					if (parallelSemaphore is not null)
+						await parallelSemaphore.WaitAsync (cancellationToken);
+					_ = Task.Run (async () => {
+						try {
+							await DeliverAtMostOnceAsync (name, ch, workersArray, item, configuration.Timeout);
+						} finally {
+							parallelSemaphore?.Release ();
+						}
+					}, cancellationToken);
 					break;
 				case ChannelDeliveryMode.AtMostOnceSync:
 					// make the call 'sync' by not processing an item until we are done with the current one
@@ -169,8 +196,16 @@ public class Hub : IHub {
 		// we have no interest in awaiting for this task, but we want to make sure it started. To do so
 		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
 		var completionSource = new TaskCompletionSource<bool>();
-		topicInfo.ConsumerTask = ConsumeChannel (topicInfo.TopicName, topicInfo.Configuration, topicInfo.Channel, 
-			topicInfo.ErrorWorker, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token);
+		// create a consumer data task that will contain the resources we need to keep track of it
+		var semaphore = (topicInfo.Configuration.MaxParallelism is not null) ? 
+			new SemaphoreSlim ((int)topicInfo.Configuration.MaxParallelism.Value) : null;
+		
+		var consumerDataTask = new ConsumeTaskData () {
+			Semaphore = semaphore,
+			Task = ConsumeChannel (topicInfo.TopicName, topicInfo.Configuration, topicInfo.Channel, 
+				topicInfo.ErrorWorker, workersCopy, completionSource, topicInfo.CancellationTokenSource.Token, semaphore)
+		};
+		topicInfo.ConsumerTask = consumerDataTask;
 		// send a message with a ack so that we can ensure we are indeed running
 		_ = topicInfo.Channel.Writer.WriteAsync (new (MessageType.Ack), topicInfo.CancellationTokenSource.Token);
 		return await completionSource.Task.ConfigureAwait (false);
@@ -396,8 +431,8 @@ public class Hub : IHub {
 				return false;
 			
 			await topicInfo.CloseChannel ().ConfigureAwait (false);
-			if (topicInfo.ConsumerTask is not null) {
-				await topicInfo.ConsumerTask;
+			if (topicInfo.ConsumerTask is not null && topicInfo.ConsumerTask?.Task is not null) {
+				await topicInfo.ConsumerTask.Value.Task;
 			}
 
 			// clean the topic if needed

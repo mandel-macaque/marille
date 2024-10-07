@@ -4,7 +4,17 @@ namespace Marille;
 
 internal abstract record TopicInfo (string TopicName, TopicConfiguration Configuration) : IDisposable, IAsyncDisposable {
 	public CancellationTokenSource? CancellationTokenSource { get; set;  }
-	public Task? ConsumerTask { get; set; }
+
+	ConsumeTaskData? taskData = null;
+
+	public ConsumeTaskData? ConsumerTask {
+		get => taskData;
+		set {
+			// dispose the previous task data
+			taskData?.Dispose ();
+			taskData = value;
+		}
+	}
 
 	public abstract Task CloseChannel ();
 
@@ -65,8 +75,8 @@ internal record TopicInfo<T> (string TopicName, TopicConfiguration Configuration
 	public override async Task CloseChannel ()
 	{
 		Channel.Writer.TryComplete ();
-		if (ConsumerTask is not null) 
-			await ConsumerTask.ConfigureAwait (false);
+		if (ConsumerTask?.Task is not null) 
+			await ConsumerTask.Value.Task.ConfigureAwait (false);
 	}
 
 	#region IDisposable Support
@@ -74,7 +84,7 @@ internal record TopicInfo<T> (string TopicName, TopicConfiguration Configuration
 	protected override void Dispose (bool disposing)
 	{
 		Channel.Writer.TryComplete ();
-		ConsumerTask?.Wait ();
+		ConsumerTask?.Task?.Wait ();
 		if (disposing) {
 			// release all IWroker instances
 			foreach (var worker in Workers) {

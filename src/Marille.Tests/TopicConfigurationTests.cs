@@ -10,6 +10,7 @@ public class TopicConfigurationTests {
 		Assert.Null (configuration.MaxRetries);
 		Assert.Null (configuration.MaxCapacity);
 		Assert.Null (configuration.Timeout);
+		Assert.Null (configuration.MaxParallelism);
 	}
 	
 	[Fact]
@@ -19,11 +20,16 @@ public class TopicConfigurationTests {
 			Mode = ChannelDeliveryMode.AtMostOnceAsync,
 			MaxRetries = 5,
 			MaxCapacity = 10,
+			MaxParallelism = 15,
 			Timeout = TimeSpan.FromSeconds(5)
 		};
 		Assert.Equal (ChannelDeliveryMode.AtMostOnceAsync, configuration.Mode);
-		Assert.Equal (5u, configuration.MaxRetries);
-		Assert.Equal (10, configuration.MaxCapacity);
+		Assert.NotNull(configuration.MaxRetries);
+		Assert.Equal (5u, configuration.MaxRetries.Value);
+		Assert.NotNull (configuration.MaxCapacity);
+		Assert.Equal (10, configuration.MaxCapacity.Value);
+		Assert.NotNull (configuration.MaxParallelism);
+		Assert.Equal (15u, configuration.MaxParallelism.Value);
 		Assert.Equal (TimeSpan.FromSeconds(5), configuration.Timeout);
 	}
 }
