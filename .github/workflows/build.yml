@@ -84,7 +84,6 @@ jobs:
 
     - name: Prepare NuGet cache
       run: mkdir -p "$NUGET_HTTP_CACHE_PATH"
-      working-directory: ./samples
 
     - name: Restore workloads
       run: sudo dotnet workload restore samples-osx.sln
