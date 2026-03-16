@@ -7,30 +7,17 @@ internal enum MessageType {
 	Data,
 	Error,
 }
-internal struct Message<T> where T : struct {
-	public Guid Id { get; }
-	public MessageType Type { get; }
+
+internal struct Message<T> (MessageType type, T payload = default, uint? retries = null, Exception? exception = null)
+	where T : struct {
+	public Guid Id { get; } = Guid.NewGuid ();
+	public MessageType Type { get; } = type;
 
 	[MemberNotNullWhen(true, nameof(Exception))]
 	public bool IsError => Type == MessageType.Error;
-	public T Payload { get; }
-	public Exception? Exception { get; }
-	public int Retries = 0;
+	public T Payload { get; } = payload;
+	public Exception? Exception { get; } = exception;
+	public int Retries = (int)(retries ?? 0);
 	
-	public Message (MessageType type)
-	{
-		Id = Guid.NewGuid();
-		Type = type;
-		Payload = default;
-	}
-	public Message (MessageType type, T payload, uint? retries) : this(type)
-	{
-		Id = Guid.NewGuid();
-		Payload = payload;
-		Retries = (int) (retries ?? 0);
-	}
-	public Message (T payload, Exception exception) : this(MessageType.Error, payload, null)
-	{
-		Exception = exception;
-	}
+	public Message (T payload, Exception exception) : this (MessageType.Error, payload, null, exception) { }
 }
