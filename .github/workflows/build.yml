@@ -71,6 +71,8 @@ jobs:
     name: Build OS X Samples
 
     runs-on: macos-latest
+    env:
+      NUGET_HTTP_CACHE_PATH: ${{ runner.temp }}/nuget-http-cache
 
     steps:
     - uses: actions/checkout@v4
@@ -79,6 +81,10 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 10.0.x
+
+    - name: Prepare NuGet cache
+      run: mkdir -p "$NUGET_HTTP_CACHE_PATH"
+      working-directory: ./samples
 
     - name: Restore workloads
       run: sudo dotnet workload restore samples-osx.sln
