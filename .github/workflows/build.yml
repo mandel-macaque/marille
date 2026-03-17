@@ -26,23 +26,14 @@ jobs:
       with:
         dotnet-version: 10.0.x
 
-    - name: Restore dependencies
-      run: dotnet restore
-      working-directory: ./src
-
-    - name: Build
-      run: dotnet build --no-restore
-      working-directory: ./src
-
-    - name: Test
-      run: dotnet test --no-build --verbosity normal --logger trx --results-directory "../TestResults"
-      working-directory: ./src
+    - name: Run build and tests via Cake
+      run: dotnet run --project build --target run-tests --configuration Release
 
     - name: Upload dotnet test results
       uses: actions/upload-artifact@v4
       with:
         name: dotnet-test-results
-        path: TestResults
+        path: ${{ github.workspace }}/TestResults
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
 
