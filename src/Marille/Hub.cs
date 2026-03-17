@@ -191,7 +191,7 @@ public class Hub : IHub {
 
 		// create a new source for the topic, we cannot use the one that we used to cancel the previous one
 		topicInfo.CancellationTokenSource = new ();
-		var workersCopy = topicInfo.Workers.ToArray (); 
+		IWorker<T> [] workersCopy = [.. topicInfo.Workers]; 
 
 		// we have no interest in awaiting for this task, but we want to make sure it started. To do so
 		// we create a TaskCompletionSource that will be set when the consume channel method is ready to consume
@@ -280,7 +280,7 @@ public class Hub : IHub {
 
 	/// <inheritdoc />
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration, IErrorWorker<T> errorWorker) where T : struct
-		=> CreateAsync (topicName, configuration, errorWorker, Array.Empty<IWorker<T>> ());
+		=> CreateAsync (topicName, configuration, errorWorker, []);
 
 	/// <inheritdoc />
 	public Task<bool> CreateAsync<T> (string topicName, TopicConfiguration configuration,

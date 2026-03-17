@@ -24,7 +24,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 10.0.x
 
     - name: Restore dependencies
       run: dotnet restore
@@ -57,7 +57,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 10.0.x
 
     - name: Restore dependencies
       run: dotnet restore samples.sln
@@ -71,6 +71,8 @@ jobs:
     name: Build OS X Samples
 
     runs-on: macos-latest
+    env:
+      NUGET_HTTP_CACHE_PATH: ${{ runner.temp }}/nuget-http-cache
 
     steps:
     - uses: actions/checkout@v4
@@ -78,7 +80,10 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 10.0.x
+
+    - name: Prepare NuGet cache
+      run: mkdir -p "$NUGET_HTTP_CACHE_PATH"
 
     - name: Restore workloads
       run: sudo dotnet workload restore samples-osx.sln
