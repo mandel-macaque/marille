@@ -16,6 +16,14 @@ that the constraints are much simpler. Working within the same process makes dea
 The library does not impose any thread usage and it fully relies on the default [TaskScheduler](https://learn.microsoft.com/en-us/dotnet/fundamentals/runtime-libraries/system-threading-tasks-taskscheduler) used in 
 the application.
 
+## Building with Cake
+
+Marille uses [Cake Frosting](https://cakebuild.net/docs/running-builds/runners/cake-frosting/) for repeatable builds:
+
+- `dotnet run --project build --target build` builds the solution.
+- `dotnet run --project build --target run-tests` builds and runs the test suite.
+- `dotnet run --project build --target generate-docs` restores the local `docfx` tool and generates the documentation site under `docs/_site`.
+
 ## Examples
 
 Here are some examples of the API usage:
@@ -107,4 +115,3 @@ if the message should be retried or not.
 If we do not want to retry a message a worker can throw and exception, such exception will be added to a queue that 
 will be consumed by the error worker that was used when the topic was created. Each topic has its own error queue, that
 means that the error worker will only consume errors from the topic that it was created for.
-

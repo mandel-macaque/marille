@@ -400,3 +400,6 @@ FodyWeavers.xsd
 
 # Mac OS annoying files
 .DS_Store
+
+# DocFX output
+docs/_site/
